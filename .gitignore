@@ -66,3 +66,4 @@ package-lock.json
 /lib/
 /src/generated/prisma
 .env
+/src/generated/prisma
