@@ -7,6 +7,12 @@ class AuthController {
         this.authService = authService;
     }
 
+    getAllUsers = async (req: Request, res: Response) => {
+        const users = await this.authService.getAll();
+
+        res.status(200).json({ status: 'sucess', users });
+    };
+
     login = async (req: Request, res: Response) => {
         const { email, password } = req.body;
         const { validUser, token } = await this.authService.login(email, password);

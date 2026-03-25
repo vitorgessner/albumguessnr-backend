@@ -11,6 +11,12 @@ class AuthService {
         this.authRepo = authRepo;
     }
 
+    getAll = async () => {
+        const users = await this.authRepo.findAll();
+
+        return users;
+    };
+
     login = async (email: string, password: string) => {
         const user = await this.validateEmail(email);
         const validUser = await this.validatePassword(user, password);

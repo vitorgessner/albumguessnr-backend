@@ -21,6 +21,8 @@ export const getApp = (): Application => {
 
     app.use('/', authRoutes(authController));
 
+    app.get('/auth', authMiddleware, (req, res) => res.json({ message: 'vai tomando' }));
+
     app.use(globalErrorMiddleware);
 
     return app;
