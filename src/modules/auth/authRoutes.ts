@@ -13,6 +13,7 @@ const authRoutes = (controller: AuthController) => {
         controller.verifyUser(req, res)
     );
     router.post('/login', (req: Request, res: Response) => controller.login(req, res));
+    router.post('/logout', (req: Request, res: Response) => controller.logout(req, res));
     router.post('/register', (req: Request, res: Response) => controller.create(req, res));
 
     return router;

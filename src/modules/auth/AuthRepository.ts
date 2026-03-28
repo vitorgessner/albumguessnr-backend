@@ -39,6 +39,9 @@ class AuthRepository {
             include: {
                 profile: true,
             },
+            omit: {
+                password: true,
+            },
         });
     };
 
@@ -49,7 +52,7 @@ class AuthRepository {
                 password: user.password,
                 profile: {
                     create: {
-                        username: user.email.split('@')[0]!,
+                        username: user.email.split('@')[0]! + Math.round(Math.random() * 100000000),
                         avatar_url: 'http://localhost:3000/profilePictures/default.svg',
                         bio: '',
                     },

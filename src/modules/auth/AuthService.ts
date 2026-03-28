@@ -39,7 +39,7 @@ class AuthService {
             expiresIn: '1h',
         });
 
-        return { validUser, token };
+        return token;
     };
 
     register = async (email: string, password: string) => {
@@ -52,6 +52,7 @@ class AuthService {
                 this.sendMail(
                     email,
                     'Account creation attempt',
+                    // eslint-disable-next-line max-len
                     'Someone tried to create an account with your email. If it was you, try logging in'
                 );
                 return null;
@@ -162,6 +163,7 @@ class AuthService {
             email,
             'Verify your account',
             'Please click on the link below to verify your account',
+            // eslint-disable-next-line max-len
             `<a href="${process.env.BASE_URL}/verify/${userVerificationToken.token}">Verify your email</a>`
         );
     };

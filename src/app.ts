@@ -7,6 +7,10 @@ import AuthRepository from './modules/auth/AuthRepository.js';
 import globalErrorMiddleware from './shared/middlewares/globalErrorMiddleware.js';
 import authMiddleware from './modules/auth/middlewares/authMiddleware.js';
 import cookieParser from 'cookie-parser';
+import profileRoutes from './modules/profile/profileRoutes.js';
+import ProfileRepository from './modules/profile/ProfileRepository.js';
+import ProfileService from './modules/profile/ProfileService.js';
+import ProfileController from './modules/profile/ProfileController.js';
 
 export const getApp = (): Application => {
     const app = express();
@@ -26,7 +30,14 @@ export const getApp = (): Application => {
     const authService = new AuthService(authRepo);
     const authController = new AuthController(authService);
 
+    const profileRepo = new ProfileRepository();
+    const profileService = new ProfileService(profileRepo);
+    const profileController = new ProfileController(profileService);
+
     app.use('/', authRoutes(authController));
+
+    app.use(authMiddleware);
+    app.use('/profile', profileRoutes(profileController));
 
     app.get('/auth', authMiddleware, (req, res) => res.json({ message: 'vai tomando' }));
 

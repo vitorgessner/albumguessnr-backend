@@ -36,12 +36,19 @@ class AuthController {
 
     login = async (req: Request, res: Response) => {
         const { email, password } = req.body;
-        const { validUser, token } = await this.authService.login(email, password);
+        const token = await this.authService.login(email, password);
 
         return res
             .status(200)
             .cookie('token', token, COOKIE_OPTIONS)
-            .json({ status: 'success', id: validUser.id, email: validUser.email });
+            .json({ status: 'success', message: 'Login successful' });
+    };
+
+    logout = async (req: Request, res: Response) => {
+        return res
+            .status(200)
+            .clearCookie('token', COOKIE_OPTIONS)
+            .json({ status: 'success', message: 'logged off' });
     };
 
     create = async (req: Request, res: Response) => {
