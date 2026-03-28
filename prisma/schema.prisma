@@ -15,9 +15,11 @@ datasource db {
 model User {
   id String    @id @default(uuid())
   email String @unique
+  emailVerified Boolean @default(false)
   password String
   createdAt DateTime @default(now())
   profile Profile?
+  verificationToken VerificationToken[]
 }
 
 model Profile {
@@ -26,6 +28,13 @@ model Profile {
   bio String @default("")
   avatar_url String
   updatedAt DateTime @updatedAt
+  userId String @unique
+  user User @relation(fields: [userId], references: [id])
+}
+
+model VerificationToken {
+  token String @id
+  expirationTime DateTime
   userId String @unique
   user User @relation(fields: [userId], references: [id])
 }

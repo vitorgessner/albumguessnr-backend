@@ -6,10 +6,17 @@ import AuthService from './modules/auth/AuthService.js';
 import AuthRepository from './modules/auth/AuthRepository.js';
 import globalErrorMiddleware from './shared/middlewares/globalErrorMiddleware.js';
 import authMiddleware from './modules/auth/middlewares/authMiddleware.js';
+import cookieParser from 'cookie-parser';
 
 export const getApp = (): Application => {
     const app = express();
-    app.use(cors());
+    app.use(
+        cors({
+            origin: process.env.FRONTEND_URL,
+            credentials: true,
+        })
+    );
+    app.use(cookieParser());
     app.use(express.urlencoded({ extended: true }));
     app.use(express.json());
 
