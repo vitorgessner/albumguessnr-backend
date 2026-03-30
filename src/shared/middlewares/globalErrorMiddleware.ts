@@ -19,6 +19,7 @@ const globalErrorMiddleware = (err: Error, req: Request, res: Response, next: Ne
         name = err.name;
     }
 
+    console.log(err);
     res.status(statusCode).json({ status: 'failed', name, statusCode, message });
 };
 
