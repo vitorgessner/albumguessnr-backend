@@ -1,5 +1,7 @@
 import AuthError from '../auth/errors/AuthError.js';
 import type ProfileRepository from './ProfileRepository.js';
+import fs from 'fs';
+import path from 'path';
 
 class ProfileService {
     private profileRepo: ProfileRepository;
@@ -13,6 +15,16 @@ class ProfileService {
 
         const defaultAvatar =
             profile.avatar_url ?? `${process.env.BASE_URL}/profilePictures/default.svg`;
+
+        if (avatar_url) {
+            const len = profile.avatar_url.split('/').length;
+            const avatar = profile.avatar_url.split('/')[len - 1];
+            if (!avatar) return null;
+            fs.unlink(path.join('public', 'profilePictures', avatar), (err) => {
+                if (err) console.log(err);
+                return;
+            });
+        }
 
         return await this.profileRepo.edit(profile.id, username, bio, avatar_url ?? defaultAvatar);
     };
