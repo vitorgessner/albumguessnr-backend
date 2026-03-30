@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import type AuthController from './AuthController.js';
 import authMiddleware from './middlewares/authMiddleware.js';
+import setLimiter from './middlewares/limiter.js';
 
 const authRoutes = (controller: AuthController) => {
     const router = Router();
@@ -9,12 +10,22 @@ const authRoutes = (controller: AuthController) => {
         controller.getAllUsersWithProfile(req, res)
     );
     router.get('/me', authMiddleware, (req: Request, res: Response) => controller.me(req, res));
-    router.get('/verify/:userVerificationToken', (req: Request, res: Response) =>
+    router.get('/verify/:userVerificationToken', setLimiter(15, 3), (req: Request, res: Response) =>
         controller.verifyUser(req, res)
     );
-    router.post('/login', (req: Request, res: Response) => controller.login(req, res));
+
+    router.post('/login', setLimiter(3, 10), (req: Request, res: Response) =>
+        controller.login(req, res)
+    );
     router.post('/logout', (req: Request, res: Response) => controller.logout(req, res));
-    router.post('/register', (req: Request, res: Response) => controller.create(req, res));
+    router.post('/register', setLimiter(15, 3), (req: Request, res: Response) =>
+        controller.create(req, res)
+    );
+    router.post(
+        '/resendVerification/:userVerificationToken',
+        setLimiter(10, 3),
+        (req: Request, res: Response) => controller.resendVerification(req, res)
+    );
 
     return router;
 };

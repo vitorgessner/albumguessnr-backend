@@ -11,9 +11,16 @@ import profileRoutes from './modules/profile/profileRoutes.js';
 import ProfileRepository from './modules/profile/ProfileRepository.js';
 import ProfileService from './modules/profile/ProfileService.js';
 import ProfileController from './modules/profile/ProfileController.js';
+import helmet from 'helmet';
 
 export const getApp = (): Application => {
     const app = express();
+    app.use(
+        helmet({
+            crossOriginResourcePolicy: false,
+        })
+    );
+    app.disable('x-powered-by');
     app.use(
         cors({
             origin: process.env.FRONTEND_URL,

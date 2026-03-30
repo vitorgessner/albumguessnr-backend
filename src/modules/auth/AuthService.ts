@@ -49,16 +49,16 @@ class AuthService {
         const emailExists = await this.authRepo.findByEmail(email);
         if (emailExists) {
             try {
-                this.sendMail(
+                await this.sendMail(
                     email,
                     'Account creation attempt',
                     // eslint-disable-next-line max-len
                     'Someone tried to create an account with your email. If it was you, try logging in'
                 );
-                return null;
             } catch (err) {
                 console.log(err);
             }
+            return { status: 'success' };
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
@@ -66,7 +66,7 @@ class AuthService {
 
         await this.authRepo.create(newUser);
 
-        this.sendTokenToEmail(email);
+        await this.sendTokenToEmail(email);
 
         return { status: 'success' };
     };
@@ -76,14 +76,18 @@ class AuthService {
 
         const emailExists = await this.authRepo.findByEmail(email);
         if (emailExists) {
-            if (!emailExists.emailVerifies) {
-                this.sendTokenToEmail(email);
-            } else {
-                this.sendMail(
-                    email,
-                    'Email already verified',
-                    'Your email is already verified, please try logging in'
-                );
+            try {
+                if (!emailExists.emailVerifies) {
+                    await this.sendTokenToEmail(email);
+                } else {
+                    await this.sendMail(
+                        email,
+                        'Email already verified',
+                        'Your email is already verified, please try logging in'
+                    );
+                }
+            } catch (err) {
+                console.log(err);
             }
         }
         return { status: 'success' };
@@ -129,19 +133,21 @@ class AuthService {
     };
 
     private sendMail = (to: string, subject: string, text: string, html?: string) => {
-        transporter.sendMail(
-            {
-                from: process.env.EMAIL,
-                to,
-                subject,
-                text,
-                html,
-            },
-            (error, info) => {
-                if (error) return console.log(error);
-                return console.log(`Email sent: ${info.response}`);
-            }
-        );
+        return new Promise((resolve, reject) => {
+            transporter.sendMail(
+                {
+                    from: process.env.EMAIL,
+                    to,
+                    subject,
+                    text,
+                    html,
+                },
+                (error, info) => {
+                    if (error) return reject(error);
+                    return resolve(info.response);
+                }
+            );
+        });
     };
 
     private generateUser = (email: string, hashedPassword: string) => {
@@ -159,7 +165,7 @@ class AuthService {
         await this.authRepo.deleteTokens(email);
         const token = this.generateToken();
         const userVerificationToken = await this.authRepo.createVerificationToken(token, email);
-        this.sendMail(
+        await this.sendMail(
             email,
             'Verify your account',
             'Please click on the link below to verify your account',
