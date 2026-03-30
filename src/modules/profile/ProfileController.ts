@@ -11,12 +11,17 @@ class ProfileController {
     edit = async (req: Request, res: Response) => {
         const { username, bio } = req.body;
         const userId = req.userId;
-        const file = req.file;
-        const path = `${process.env.BASE_URL}/profilePictures/${file?.filename}`;
-
         if (!userId) throw new AuthError(401, 'Not authenticated');
 
-        await this.profileService.edit(userId, username, bio, path);
+        const file = req.file;
+        if (file) {
+            const path = `${process.env.BASE_URL}/profilePictures/${file?.filename}`;
+            await this.profileService.edit(userId, username, bio, path);
+        }
+
+        if (!file) {
+            await this.profileService.edit(userId, username, bio);
+        }
 
         res.status(200).json({ status: 'success', message: 'Profile changed' });
     };

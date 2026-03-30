@@ -8,18 +8,20 @@ class ProfileService {
     }
 
     edit = async (id: string, username: string, bio: string, avatar_url?: string) => {
-        const defaultAvatar = `${process.env.BASE_URL}/profilePictures/default.svg`;
-        const profileId = await this.getProfileId(id);
-        if (!profileId) throw new AuthError(404, 'Profile not found');
+        const profile = await this.getProfile(id);
+        if (!profile) throw new AuthError(404, 'Profile not found');
 
-        return await this.profileRepo.edit(profileId, username, bio, avatar_url ?? defaultAvatar);
+        const defaultAvatar =
+            profile.avatar_url ?? `${process.env.BASE_URL}/profilePictures/default.svg`;
+
+        return await this.profileRepo.edit(profile.id, username, bio, avatar_url ?? defaultAvatar);
     };
 
-    getProfileId = async (id: string) => {
+    getProfile = async (id: string) => {
         const profile = await this.profileRepo.findByUserId(id);
         if (!profile) return null;
 
-        return profile?.id;
+        return profile;
     };
 }
 
