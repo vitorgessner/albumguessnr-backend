@@ -26,7 +26,14 @@ class ProfileService {
             });
         }
 
-        return await this.profileRepo.edit(profile.id, username, bio, avatar_url ?? defaultAvatar);
+        const trimmedUsername = username.trim();
+
+        return await this.profileRepo.edit(
+            profile.id,
+            trimmedUsername,
+            bio,
+            avatar_url ?? defaultAvatar
+        );
     };
 
     getProfile = async (id: string) => {

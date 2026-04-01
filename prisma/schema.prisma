@@ -13,28 +13,135 @@ datasource db {
 }
 
 model User {
-  id String    @id @default(uuid())
-  email String @unique
-  emailVerified Boolean @default(false)
-  password String
-  createdAt DateTime @default(now())
-  profile Profile?
-  verificationToken VerificationToken[]
+  id                  String              @id @default(uuid())
+  email               String              @unique
+  emailVerified       Boolean             @default(false)
+  password            String
+  createdAt           DateTime            @default(now())
+  profile             Profile?
+  verificationToken   VerificationToken[]
+  refreshToken        RefreshToken[]
+  lastfmIntegrationId String?
+  lastfmIntegration   LastFmIntegration?  @relation(fields: [lastfmIntegrationId], references: [id])
+  userAlbumScores     UserAlbumScores[]
+  userAlbumStats      UserAlbumStats[]
 }
 
 model Profile {
-  id String    @id @default(uuid())
-  username String @unique
-  bio String @default("")
+  id         String   @id @default(uuid())
+  username   String   @unique
+  bio        String   @default("")
   avatar_url String
-  updatedAt DateTime @updatedAt
-  userId String @unique
-  user User @relation(fields: [userId], references: [id])
+  updatedAt  DateTime @updatedAt
+  userId     String   @unique
+  user       User     @relation(fields: [userId], references: [id])
 }
 
 model VerificationToken {
-  token String @id
+  token          String   @id
   expirationTime DateTime
-  userId String @unique
-  user User @relation(fields: [userId], references: [id])
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model RefreshToken {
+  token          String   @id
+  expirationTime DateTime
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+}
+
+model LastFmIntegration {
+  id                     String                 @id @default(uuid())
+  lastfmUsername         String                 @unique
+  lastSyncedAt           DateTime
+  lastPageSynced         Int                    @default(1)
+  users                  User[]
+  userAlbumFamiliarities UserAlbumFamiliarity[]
+}
+
+model UserAlbumScores {
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  albumId    String
+  album      Album    @relation(fields: [albumId], references: [id])
+  gameModeId String
+  gameMode   Category @relation(fields: [gameModeId], references: [id])
+  bestScore  Int
+
+  @@id([userId, albumId, gameModeId])
+}
+
+model UserAlbumStats {
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  albumId         String
+  album           Album    @relation(fields: [albumId], references: [id])
+  lastTimeGuessed DateTime
+  timesGuessed    Int
+
+  @@id([userId, albumId])
+}
+
+model UserAlbumFamiliarity {
+  id                  String            @id @default(uuid())
+  timesListened       Int
+  tracksListened      Int
+  lastTimeListened    DateTime
+  albumId             String
+  album               Album             @relation(fields: [albumId], references: [id])
+  lastFmIntegrationId String
+  lastFmIntegration   LastFmIntegration @relation(fields: [lastFmIntegrationId], references: [id])
+}
+
+model Category {
+  id              String            @id @default(uuid())
+  name            String
+  userAlbumScores UserAlbumScores[]
+}
+
+model Album {
+  id                     String                 @id @default(uuid())
+  mbid                   String?
+  name                   String
+  normalizedName         String
+  year                   DateTime
+  cover_url              String
+  genres                 AlbumsGenre[]
+  artists                AlbumsArtist[]
+  userAlbumFamiliarities UserAlbumFamiliarity[]
+  userAlbumScores        UserAlbumScores[]
+  userAlbumStats         UserAlbumStats[]
+}
+
+model Genre {
+  id     String        @id @default(uuid())
+  name   String
+  albums AlbumsGenre[]
+}
+
+model AlbumsGenre {
+  albumId String
+  genreId String
+  album   Album  @relation(fields: [albumId], references: [id])
+  genre   Genre  @relation(fields: [genreId], references: [id])
+
+  @@id([albumId, genreId])
+}
+
+model Artist {
+  id             String         @id @default(uuid())
+  mbid           String?
+  name           String
+  normalizedName String
+  albums         AlbumsArtist[]
+}
+
+model AlbumsArtist {
+  albumId  String
+  artistId String
+  album    Album  @relation(fields: [albumId], references: [id])
+  artist   Artist @relation(fields: [artistId], references: [id])
+
+  @@id([albumId, artistId])
 }

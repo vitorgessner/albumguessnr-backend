@@ -1,15 +1,23 @@
 import { prisma } from '../../config/prisma.js';
-import type { User } from '../../generated/prisma/client.js';
+import type { UserCreateInput } from '../../generated/prisma/models.js';
 
 class AuthRepository {
     findAll = async () => {
         return await prisma.user.findMany();
     };
 
-    findAllWIthProfile = async () => {
+    findAllWithProfile = async () => {
         return await prisma.user.findMany({
             include: {
                 profile: true,
+            },
+        });
+    };
+
+    findAllWithLastFmIntegration = async () => {
+        return await prisma.user.findMany({
+            include: {
+                lastfmIntegration: true,
             },
         });
     };
@@ -31,13 +39,14 @@ class AuthRepository {
         });
     };
 
-    findByIdWithProfile = async (id: string) => {
+    findByIdWithProfileAndLastfmIntegration = async (id: string) => {
         return await prisma.user.findUnique({
             where: {
                 id,
             },
             include: {
                 profile: true,
+                lastfmIntegration: true,
             },
             omit: {
                 password: true,
@@ -45,7 +54,7 @@ class AuthRepository {
         });
     };
 
-    create = async (user: User) => {
+    create = async (user: UserCreateInput) => {
         return await prisma.user.create({
             data: {
                 email: user.email,
@@ -81,7 +90,7 @@ class AuthRepository {
                 email,
             },
             data: {
-                emailVerifies: true,
+                emailVerified: true,
                 verificationToken: {
                     delete: {
                         token,

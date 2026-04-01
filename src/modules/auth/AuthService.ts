@@ -2,10 +2,11 @@ import bcrypt from 'bcryptjs';
 import type { User } from '../../generated/prisma/client.js';
 import ValidationError from '../../shared/errors/ValidationError.js';
 import type AuthRepository from './AuthRepository.js';
-import { randomUUID, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import transporter from './utils/transporter.js';
 import AuthError from './errors/AuthError.js';
+import type { UserCreateInput } from '../../generated/prisma/models.js';
 
 class AuthService {
     private authRepo: AuthRepository;
@@ -20,13 +21,19 @@ class AuthService {
     };
 
     getAllWithProfile = async () => {
-        const users = await this.authRepo.findAllWIthProfile();
+        const users = await this.authRepo.findAllWithProfile();
+
+        return users;
+    };
+
+    getAllWithLastfmIntegration = async () => {
+        const users = await this.authRepo.findAllWithLastFmIntegration();
 
         return users;
     };
 
     me = async (id: string) => {
-        const me = await this.authRepo.findByIdWithProfile(id);
+        const me = await this.authRepo.findByIdWithProfileAndLastfmIntegration(id);
 
         return me;
     };
@@ -77,7 +84,7 @@ class AuthService {
         const emailExists = await this.authRepo.findByEmail(email);
         if (emailExists) {
             try {
-                if (!emailExists.emailVerifies) {
+                if (!emailExists.emailVerified) {
                     await this.sendTokenToEmail(email);
                 } else {
                     await this.sendMail(
@@ -109,14 +116,18 @@ class AuthService {
             expiresIn: '1h',
         });
 
-        return { token, userId: verificationToken.user.id };
+        const user = await this.authRepo.findByIdWithProfileAndLastfmIntegration(
+            verificationToken.user.id
+        );
+
+        return { token, username: user?.profile?.username };
     };
 
     private validateEmail = async (email: string) => {
         const user = await this.authRepo.findByEmail(email);
 
         if (!user) throw new ValidationError(404, 'Email or password incorrect');
-        if (!user.emailVerifies) throw new AuthError(401, 'Email not verified');
+        if (!user.emailVerified) throw new AuthError(401, 'Email not verified');
 
         return user;
     };
@@ -151,12 +162,12 @@ class AuthService {
     };
 
     private generateUser = (email: string, hashedPassword: string) => {
-        const newUser: User = {
-            id: randomUUID(),
+        const newUser: UserCreateInput = {
             email,
             password: hashedPassword,
-            emailVerifies: false,
+            emailVerified: false,
             createdAt: new Date(),
+            // lastfmIntegrationId: null,
         };
         return newUser;
     };

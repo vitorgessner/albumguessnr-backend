@@ -12,15 +12,19 @@ import ProfileRepository from './modules/profile/ProfileRepository.js';
 import ProfileService from './modules/profile/ProfileService.js';
 import ProfileController from './modules/profile/ProfileController.js';
 import helmet from 'helmet';
+import IntegrationService from './modules/integration/IntegrationService.js';
+import IntegrationController from './modules/integration/IntegrationController.js';
+import IntegrationRepository from './modules/integration/IntegrationRepository.js';
+import integrationRoutes from './modules/integration/integrationRoutes.js';
 
 export const getApp = (): Application => {
     const app = express();
-    app.use(
-        helmet({
-            crossOriginResourcePolicy: false,
-        })
-    );
-    app.disable('x-powered-by');
+    // app.use(
+    //     helmet({
+    //         crossOriginResourcePolicy: false,
+    //     })
+    // );
+    // app.disable('x-powered-by');
     app.use(
         cors({
             origin: process.env.FRONTEND_URL,
@@ -41,10 +45,15 @@ export const getApp = (): Application => {
     const profileService = new ProfileService(profileRepo);
     const profileController = new ProfileController(profileService);
 
+    const integrationRepo = new IntegrationRepository();
+    const integrationService = new IntegrationService(integrationRepo);
+    const integrationController = new IntegrationController(integrationService);
+
     app.use('/', authRoutes(authController));
 
     app.use(authMiddleware);
     app.use('/profile', profileRoutes(profileController));
+    app.use('/integration', integrationRoutes(integrationController));
 
     app.get('/auth', authMiddleware, (req, res) => res.json({ message: 'vai tomando' }));
 

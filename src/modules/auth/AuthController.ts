@@ -21,6 +21,12 @@ class AuthController {
         res.status(200).json({ status: 'success', users });
     };
 
+    getAllUsersWithLastfmIntegration = async (req: Request, res: Response) => {
+        const users = await this.authService.getAllWithLastfmIntegration();
+
+        res.status(200).json({ status: 'success', users });
+    };
+
     me = async (req: Request, res: Response) => {
         if (!req.userId) throw new AuthError(401, 'Unauthorized');
         const me = await this.authService.me(req.userId);
@@ -60,13 +66,13 @@ class AuthController {
 
     verifyUser = async (req: Request, res: Response) => {
         const { userVerificationToken } = req.params;
-        const { userId, token } = await this.authService.verifyEmail(
+        const { username, token } = await this.authService.verifyEmail(
             userVerificationToken as string
         );
 
         return res
             .cookie('token', token, COOKIE_OPTIONS)
-            .redirect(`${process.env.FRONTEND_URL!}/${userId}/profile/edit`);
+            .redirect(`${process.env.FRONTEND_URL!}/${username}/profile/edit`);
     };
 }
 

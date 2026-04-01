@@ -9,6 +9,9 @@ const authRoutes = (controller: AuthController) => {
     router.get('/users/profiles', (req: Request, res: Response) =>
         controller.getAllUsersWithProfile(req, res)
     );
+    router.get('/users/lastfm', (req: Request, res: Response) =>
+        controller.getAllUsersWithLastfmIntegration(req, res)
+    );
     router.get('/me', authMiddleware, (req: Request, res: Response) => controller.me(req, res));
     router.get('/verify/:userVerificationToken', setLimiter(15, 3), (req: Request, res: Response) =>
         controller.verifyUser(req, res)
@@ -18,13 +21,11 @@ const authRoutes = (controller: AuthController) => {
         controller.login(req, res)
     );
     router.post('/logout', (req: Request, res: Response) => controller.logout(req, res));
-    router.post('/register', setLimiter(15, 3), (req: Request, res: Response) =>
+    router.post('/register', setLimiter(0.1, 3), (req: Request, res: Response) =>
         controller.create(req, res)
     );
-    router.post(
-        '/resendVerification/:userVerificationToken',
-        setLimiter(10, 3),
-        (req: Request, res: Response) => controller.resendVerification(req, res)
+    router.post('/resendVerification', setLimiter(10, 3), (req: Request, res: Response) =>
+        controller.resendVerification(req, res)
     );
 
     return router;
