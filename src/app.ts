@@ -16,6 +16,7 @@ import IntegrationService from './modules/integration/IntegrationService.js';
 import IntegrationController from './modules/integration/IntegrationController.js';
 import IntegrationRepository from './modules/integration/IntegrationRepository.js';
 import integrationRoutes from './modules/integration/integrationRoutes.js';
+import AlbumRepository from './modules/album/AlbumRepository.js';
 
 export const getApp = (): Application => {
     const app = express();
@@ -45,8 +46,10 @@ export const getApp = (): Application => {
     const profileService = new ProfileService(profileRepo);
     const profileController = new ProfileController(profileService);
 
+    const albumRepo = new AlbumRepository();
+
     const integrationRepo = new IntegrationRepository();
-    const integrationService = new IntegrationService(integrationRepo);
+    const integrationService = new IntegrationService(integrationRepo, albumRepo);
     const integrationController = new IntegrationController(integrationService);
 
     app.use('/', authRoutes(authController));

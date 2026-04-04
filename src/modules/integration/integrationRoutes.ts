@@ -4,8 +4,10 @@ import type IntegrationController from './IntegrationController.js';
 const integrationRoutes = (controller: IntegrationController) => {
     const router = Router();
 
-    router.put('/:username', (req: Request, res: Response) =>
-        controller.createOrConnectLasfmUser(req, res)
+    router.put('/', (req: Request, res: Response) => controller.createOrConnectLasfmUser(req, res));
+
+    router.get('/albums/:lastfmUsername', (req: Request, res: Response) =>
+        controller.fetchUserAlbums(req, res)
     );
 
     return router;

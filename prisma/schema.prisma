@@ -84,7 +84,6 @@ model UserAlbumStats {
 }
 
 model UserAlbumFamiliarity {
-  id                  String            @id @default(uuid())
   timesListened       Int
   tracksListened      Int
   lastTimeListened    DateTime
@@ -92,6 +91,8 @@ model UserAlbumFamiliarity {
   album               Album             @relation(fields: [albumId], references: [id])
   lastFmIntegrationId String
   lastFmIntegration   LastFmIntegration @relation(fields: [lastFmIntegrationId], references: [id])
+
+  @@id([lastFmIntegrationId, albumId])
 }
 
 model Category {
@@ -105,6 +106,7 @@ model Album {
   mbid                   String?
   name                   String
   normalizedName         String
+  normalizedArtist String
   year                   DateTime
   cover_url              String
   genres                 AlbumsGenre[]
@@ -112,11 +114,13 @@ model Album {
   userAlbumFamiliarities UserAlbumFamiliarity[]
   userAlbumScores        UserAlbumScores[]
   userAlbumStats         UserAlbumStats[]
+
+  @@unique([normalizedName, normalizedArtist, year])
 }
 
 model Genre {
   id     String        @id @default(uuid())
-  name   String
+  name   String @unique
   albums AlbumsGenre[]
 }
 
@@ -133,7 +137,7 @@ model Artist {
   id             String         @id @default(uuid())
   mbid           String?
   name           String
-  normalizedName String
+  normalizedName String @unique
   albums         AlbumsArtist[]
 }
 
