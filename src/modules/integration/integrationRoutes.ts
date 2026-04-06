@@ -6,9 +6,7 @@ const integrationRoutes = (controller: IntegrationController) => {
 
     router.put('/', (req: Request, res: Response) => controller.createOrConnectLasfmUser(req, res));
 
-    router.get('/albums/:lastfmUsername', (req: Request, res: Response) =>
-        controller.fetchUserAlbums(req, res)
-    );
+    router.get('/albums/', (req: Request, res: Response) => controller.getAlbums(req, res));
 
     return router;
 };

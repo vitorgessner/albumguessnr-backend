@@ -21,6 +21,41 @@ class IntegrationRepository {
         });
     };
 
+    findLastfmUserByUserId = async (id: string) => {
+        return await prisma.user.findUnique({
+            where: {
+                id,
+            },
+            select: {
+                lastfmIntegration: true,
+            },
+        });
+    };
+
+    findAlbums = async (id: string, rand: number) => {
+        return await prisma.userAlbumFamiliarity.findMany({
+            where: {
+                lastFmIntegrationId: id,
+            },
+            include: {
+                album: true,
+            },
+            orderBy: {
+                timesListened: 'desc',
+            },
+            take: 50,
+            skip: rand,
+        });
+    };
+
+    countUserAlbums = async (id: string) => {
+        return await prisma.userAlbumFamiliarity.count({
+            where: {
+                lastFmIntegrationId: id,
+            },
+        });
+    };
+
     updateLastSynced = async (lastfmUsername: string, data: IUpdateSync) => {
         return await prisma.lastFmIntegration.update({
             where: {
@@ -33,13 +68,14 @@ class IntegrationRepository {
         });
     };
 
-    getLastPageSynced = async (lastfmUsername: string) => {
+    getLasSyncedStats = async (lastfmUsername: string) => {
         return await prisma.lastFmIntegration.findUnique({
             where: {
                 lastfmUsername,
             },
             select: {
                 lastPageSynced: true,
+                lastSyncedAt: true,
             },
         });
     };
@@ -67,6 +103,7 @@ class IntegrationRepository {
                 },
                 create: {
                     lastfmUsername,
+                    lastPageSynced: 0,
                     lastSyncedAt: new Date(),
                     users: {
                         connect: {

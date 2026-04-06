@@ -1,4 +1,4 @@
-import type IntegrationRepository from './IntegrationRepository.js';
+import IntegrationRepository from './IntegrationRepository.js';
 import type AlbumRepository from '../album/AlbumRepository.js';
 import AuthError from '../auth/errors/AuthError.js';
 import ValidationError from '../../shared/errors/ValidationError.js';
@@ -37,9 +37,8 @@ class IntegrationService {
         this.albumRepo = albumRepo;
     }
 
-    connectLastfmUser = async (lastfmUsername: string, userId?: string) => {
+    connectLastfmUser = async (lastfmUsername: string = 'FishingDonut', userId?: string) => {
         if (!userId) throw new AuthError(401, 'Unauthorized');
-        if (!lastfmUsername) lastfmUsername = 'FishingDonut';
 
         const trimmedUsername = lastfmUsername.trim();
 
@@ -73,7 +72,7 @@ class IntegrationService {
                         name: album.name,
                         normalizedName: album.normalizedName,
                         normalizedArtist: album.normalizedArtist,
-                        year: album.year ?? new Date('1900-01-01'),
+                        year: album.year,
                         cover_url: album.cover_url,
                     },
                     [],
@@ -95,6 +94,36 @@ class IntegrationService {
         } catch (err) {
             console.log(err);
         }
+    };
+
+    getLastSyncedStats = async (lastfmUsername: string) => {
+        const stats = await this.integrationRepo.getLasSyncedStats(lastfmUsername.trim());
+        if (!stats) return null;
+
+        return stats;
+    };
+
+    getLastfmUserByUserId = async (id: string) => {
+        const lastfmUser = await this.integrationRepo.findLastfmUserByUserId(id);
+        if (!lastfmUser) return null;
+
+        return lastfmUser;
+    };
+
+    getAlbums = async (id: string) => {
+        const lastfmUser = await this.integrationRepo.findLastfmUserByUserId(id);
+        if (!lastfmUser) throw new IntegrationError(404, 'Lastfm user not found');
+
+        const lastfmIntegrationId = lastfmUser.lastfmIntegration?.id;
+        if (!lastfmIntegrationId) throw new IntegrationError(404, 'Lastfm integration not found');
+
+        const userAlbumsQtd = await this.integrationRepo.countUserAlbums(lastfmIntegrationId);
+
+        const rand = userAlbumsQtd < 50 ? 0 : Math.floor(Math.random() * (userAlbumsQtd - 50));
+
+        const albums = await this.integrationRepo.findAlbums(lastfmIntegrationId, rand);
+
+        return albums;
     };
 
     private normalizeArtists = async (albums: Array<IFetchData>) => {
@@ -122,9 +151,8 @@ class IntegrationService {
 
     private fetchTopAlbums = async (username: string) => {
         const trimmedUsername = username.trim();
-        const lastPage =
-            (await this.integrationRepo.getLastPageSynced(trimmedUsername))?.lastPageSynced ?? 0;
-        const nextPage = lastPage + 1;
+        const stats = await this.getLastSyncedStats(username);
+        const nextPage = (stats?.lastPageSynced ?? 0) + 1;
         const response = await axios.get('', {
             params: {
                 method: 'user.gettopalbums',

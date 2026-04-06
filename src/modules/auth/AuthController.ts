@@ -2,11 +2,14 @@ import type { Request, Response } from 'express';
 import AuthService from './AuthService.js';
 import COOKIE_OPTIONS from './utils/COOKIE_OPTIONS.js';
 import AuthError from './errors/AuthError.js';
+import type IntegrationService from '../integration/IntegrationService.js';
 
 class AuthController {
     private authService: AuthService;
-    constructor(authService: AuthService) {
+    private integrationService: IntegrationService;
+    constructor(authService: AuthService, integrationService: IntegrationService) {
         this.authService = authService;
+        this.integrationService = integrationService;
     }
 
     getAllUsers = async (req: Request, res: Response) => {
@@ -66,9 +69,14 @@ class AuthController {
 
     verifyUser = async (req: Request, res: Response) => {
         const { userVerificationToken } = req.params;
-        const { username, token } = await this.authService.verifyEmail(
+        const { username, token, id } = await this.authService.verifyEmail(
             userVerificationToken as string
         );
+        try {
+            await this.integrationService.connectLastfmUser(undefined, id);
+        } catch (err) {
+            console.log(err);
+        }
 
         return res
             .cookie('token', token, COOKIE_OPTIONS)

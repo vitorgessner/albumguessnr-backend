@@ -17,6 +17,8 @@ import IntegrationController from './modules/integration/IntegrationController.j
 import IntegrationRepository from './modules/integration/IntegrationRepository.js';
 import integrationRoutes from './modules/integration/integrationRoutes.js';
 import AlbumRepository from './modules/album/AlbumRepository.js';
+import syncMiddleware from './modules/game/middlewares/syncMiddleware.js';
+import gameRoutes from './modules/game/gameRoutes.js';
 
 export const getApp = (): Application => {
     const app = express();
@@ -38,25 +40,27 @@ export const getApp = (): Application => {
 
     app.use(express.static('public'));
 
-    const authRepo = new AuthRepository();
-    const authService = new AuthService(authRepo);
-    const authController = new AuthController(authService);
-
-    const profileRepo = new ProfileRepository();
-    const profileService = new ProfileService(profileRepo);
-    const profileController = new ProfileController(profileService);
-
     const albumRepo = new AlbumRepository();
 
     const integrationRepo = new IntegrationRepository();
     const integrationService = new IntegrationService(integrationRepo, albumRepo);
     const integrationController = new IntegrationController(integrationService);
 
+    const authRepo = new AuthRepository();
+    const authService = new AuthService(authRepo);
+    const authController = new AuthController(authService, integrationService);
+
+    const profileRepo = new ProfileRepository();
+    const profileService = new ProfileService(profileRepo);
+    const profileController = new ProfileController(profileService);
+
     app.use('/', authRoutes(authController));
 
     app.use(authMiddleware);
     app.use('/profile', profileRoutes(profileController));
     app.use('/integration', integrationRoutes(integrationController));
+
+    app.use('/game', syncMiddleware(integrationService), gameRoutes);
 
     app.get('/auth', authMiddleware, (req, res) => res.json({ message: 'vai tomando' }));
 

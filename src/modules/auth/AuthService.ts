@@ -120,7 +120,7 @@ class AuthService {
             verificationToken.user.id
         );
 
-        return { token, username: user?.profile?.username };
+        return { token, username: user?.profile?.username, id: validUser.id };
     };
 
     private validateEmail = async (email: string) => {

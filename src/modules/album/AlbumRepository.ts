@@ -18,10 +18,9 @@ class AlbumRepository {
     ) => {
         return await prisma.album.upsert({
             where: {
-                normalizedName_normalizedArtist_year: {
+                normalizedName_normalizedArtist: {
                     normalizedName: data.normalizedName,
                     normalizedArtist: data.normalizedArtist,
-                    year: data.year,
                 },
             },
             create: {
@@ -29,7 +28,7 @@ class AlbumRepository {
                 name: data.name,
                 normalizedName: data.normalizedName,
                 normalizedArtist: data.normalizedArtist,
-                year: data.year,
+                year: data.year ?? null,
                 cover_url: data.cover_url,
                 genres: {
                     create: genres.map((g) => ({
@@ -65,7 +64,7 @@ class AlbumRepository {
                 name: data.name,
                 normalizedName: data.normalizedName,
                 normalizedArtist: data.normalizedArtist,
-                year: data.year,
+                year: data.year ?? null,
                 cover_url: data.cover_url,
             },
         });
