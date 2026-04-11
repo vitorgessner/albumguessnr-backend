@@ -93,6 +93,7 @@ model UserAlbumFamiliarity {
   lastFmIntegration   LastFmIntegration @relation(fields: [lastFmIntegrationId], references: [id])
 
   @@id([lastFmIntegrationId, albumId])
+  @@index([lastFmIntegrationId])
 }
 
 model Category {

@@ -54,7 +54,7 @@ class IntegrationService {
         return { status: 'success', message: 'User connected' };
     };
 
-    fetchUserAlbums = async (lastfmUsername: string | undefined) => {
+    fetchUserAlbums = async (lastfmUsername: string | undefined, cb: Function) => {
         try {
             if (!lastfmUsername) throw new ValidationError(400, 'LastFm username not specified');
 
@@ -93,6 +93,8 @@ class IntegrationService {
             });
         } catch (err) {
             console.log(err);
+        } finally {
+            cb();
         }
     };
 

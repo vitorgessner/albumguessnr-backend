@@ -16,14 +16,6 @@ class IntegrationController {
         if (response.status === 'success') res.status(200).json({ message: response.message });
     };
 
-    fetchUserAlbums = async (req: Request, res: Response) => {
-        const { lastfmUsername } = req.params;
-
-        await this.integrationService.fetchUserAlbums(lastfmUsername as string);
-
-        res.status(200).json({ status: 'success', message: 'fetched' });
-    };
-
     getAlbums = async (req: Request, res: Response) => {
         const userId = req.userId;
         if (!userId) throw new AuthError(401, 'Unauthorized');

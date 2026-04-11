@@ -13,6 +13,8 @@ class ProfileService {
         const profile = await this.getProfile(id);
         if (!profile) throw new AuthError(404, 'Profile not found');
 
+        console.log(avatar_url);
+
         const defaultAvatar =
             profile.avatar_url ?? `${process.env.BASE_URL}/profilePictures/default.svg`;
 
@@ -20,13 +22,17 @@ class ProfileService {
             const len = profile.avatar_url.split('/').length;
             const avatar = profile.avatar_url.split('/')[len - 1];
             if (!avatar) return null;
-            fs.unlink(path.join('public', 'profilePictures', avatar), (err) => {
-                if (err) console.log(err);
-                return;
-            });
+            if (avatar !== 'default.svg') {
+                fs.unlink(path.join('public', 'profilePictures', avatar), (err) => {
+                    if (err) console.log(err);
+                    return;
+                });
+            }
         }
 
         const trimmedUsername = username.trim();
+
+        console.log(avatar_url);
 
         return await this.profileRepo.edit(
             profile.id,

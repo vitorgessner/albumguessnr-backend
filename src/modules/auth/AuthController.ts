@@ -80,7 +80,7 @@ class AuthController {
 
         return res
             .cookie('token', token, COOKIE_OPTIONS)
-            .redirect(`${process.env.FRONTEND_URL!}/${username}/profile/edit`);
+            .redirect(`${process.env.FRONTEND_URL!}/${username}/edit`);
     };
 }
 

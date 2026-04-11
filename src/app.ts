@@ -60,7 +60,8 @@ export const getApp = (): Application => {
     app.use('/profile', profileRoutes(profileController));
     app.use('/integration', integrationRoutes(integrationController));
 
-    app.use('/game', syncMiddleware(integrationService), gameRoutes);
+    const map = new Map<string, boolean>();
+    app.use('/game', syncMiddleware(integrationService, map), gameRoutes());
 
     app.get('/auth', authMiddleware, (req, res) => res.json({ message: 'vai tomando' }));
 
