@@ -115,6 +115,7 @@ model Album {
   userAlbumFamiliarities UserAlbumFamiliarity[]
   userAlbumScores        UserAlbumScores[]
   userAlbumStats         UserAlbumStats[]
+  tracks Track[]
 
   @@unique([normalizedName, normalizedArtist])
 }
@@ -149,4 +150,14 @@ model AlbumsArtist {
   artist   Artist @relation(fields: [artistId], references: [id])
 
   @@id([albumId, artistId])
+}
+
+model Track {
+  id String @id @default(uuid())
+  name String
+  normalizedName String
+  albumId String
+  album Album @relation(fields: [albumId], references: [id])
+
+  @@unique([normalizedName, albumId])
 }

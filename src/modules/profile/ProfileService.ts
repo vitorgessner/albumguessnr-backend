@@ -13,8 +13,6 @@ class ProfileService {
         const profile = await this.getProfile(id);
         if (!profile) throw new AuthError(404, 'Profile not found');
 
-        console.log(avatar_url);
-
         const defaultAvatar =
             profile.avatar_url ?? `${process.env.BASE_URL}/profilePictures/default.svg`;
 
@@ -31,8 +29,6 @@ class ProfileService {
         }
 
         const trimmedUsername = username.trim();
-
-        console.log(avatar_url);
 
         return await this.profileRepo.edit(
             profile.id,

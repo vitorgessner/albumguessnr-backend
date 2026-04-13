@@ -1,6 +1,10 @@
 import { prisma } from '../../config/prisma.js';
-import type { Genre } from '../../generated/prisma/client.js';
-import type { AlbumCreateInput, ArtistCreateInput } from '../../generated/prisma/models.js';
+import type {
+    AlbumCreateInput,
+    ArtistCreateInput,
+    GenreCreateInput,
+    TrackCreateWithoutAlbumInput,
+} from '../../generated/prisma/models.js';
 
 type AlbumCreateInputWithoutMbid = Omit<AlbumCreateInput, 'mbid'> & {
     mbid: string | null;
@@ -13,8 +17,9 @@ type ArtistCreateInputWithoutMbid = Omit<ArtistCreateInput, 'mbid'> & {
 class AlbumRepository {
     create = async (
         data: AlbumCreateInputWithoutMbid,
-        genres: Array<Genre>,
-        artists: Array<ArtistCreateInputWithoutMbid>
+        genres: Array<GenreCreateInput>,
+        artists: Array<ArtistCreateInputWithoutMbid>,
+        tracks: Array<TrackCreateWithoutAlbumInput>
     ) => {
         return await prisma.album.upsert({
             where: {
@@ -54,10 +59,17 @@ class AlbumRepository {
                         },
                     })),
                 },
+                tracks: {
+                    create: tracks.map((t) => ({
+                        name: t.name,
+                        normalizedName: t.normalizedName,
+                    })),
+                },
             },
             include: {
                 genres: { include: { genre: true } },
                 artists: { include: { artist: true } },
+                tracks: { include: { album: true } },
             },
             update: {
                 mbid: data.mbid,

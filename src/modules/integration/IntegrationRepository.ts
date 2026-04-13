@@ -38,7 +38,16 @@ class IntegrationRepository {
                 lastFmIntegrationId: id,
             },
             include: {
-                album: true,
+                album: {
+                    include: {
+                        tracks: true,
+                        genres: {
+                            select: {
+                                genre: true,
+                            },
+                        },
+                    },
+                },
             },
             orderBy: {
                 timesListened: 'desc',

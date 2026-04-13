@@ -52,10 +52,24 @@ const EDITION_REGEX = new RegExp(
     'gi'
 );
 
+const removePunctuation = (name: string): string => {
+    return name.replace(/[^\p{L}\p{N}\s]/gu, '');
+};
+
 export const normalizeAlbumName = (name: string): string => {
-    return name.replace(EDITION_REGEX, '').trim().toLowerCase();
+    const nameWithoutEdition = name.replace(EDITION_REGEX, '');
+    return removePunctuation(nameWithoutEdition).trim().toLowerCase();
+};
+
+export const normalizeTrackName = (name: string): string => {
+    const nameWithoutEdition = name.replace(EDITION_REGEX, '');
+    return removePunctuation(nameWithoutEdition).trim().toLowerCase();
 };
 
 export const normalizeArtistName = (name: string): string => {
-    return name.trim().toLowerCase();
+    return removePunctuation(name).trim().toLowerCase();
+};
+
+export const normalizeTagName = (name: string): string => {
+    return removePunctuation(name).trim().toLowerCase();
 };

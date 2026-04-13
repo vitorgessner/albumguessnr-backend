@@ -1,33 +1,19 @@
+/* eslint-disable prettier/prettier */
 import IntegrationRepository from './IntegrationRepository.js';
 import type AlbumRepository from '../album/AlbumRepository.js';
 import AuthError from '../auth/errors/AuthError.js';
 import ValidationError from '../../shared/errors/ValidationError.js';
 import IntegrationError from './errors/IntegrationError.js';
 import axios from '../../config/axios.js';
-import { normalizeAlbumName, normalizeArtistName } from './utils/normalize.js';
-
-interface IFetchData {
-    artist: {
-        url: string;
-        name: string;
-        mbid: string;
-    };
-    image: [
-        {
-            size: string;
-            '#text': string;
-        },
-    ];
-    mbid: string;
-    url: string;
-    playcount: string;
-    year: Date;
-    '@attr': {
-        rank: string;
-    };
-    name: string;
-    normalizedName: string;
-}
+import {
+    normalizeAlbumName,
+    normalizeArtistName,
+    normalizeTagName,
+    normalizeTrackName,
+} from './utils/normalize.js';
+import type { IUserAlbum } from './types/IUserAlbum.js';
+import type { IAlbumInfo } from './types/IAlbumInfo.js';
+import { AxiosError } from 'axios';
 
 class IntegrationService {
     private integrationRepo: IntegrationRepository;
@@ -66,25 +52,57 @@ class IntegrationService {
             const normalizedAlbums = await this.normalizeAlbums(albums);
 
             for (const album of normalizedAlbums) {
-                const newAlbum = await this.albumRepo.create(
-                    {
-                        mbid: album.mbid === '' ? null : album.mbid,
-                        name: album.name,
-                        normalizedName: album.normalizedName,
-                        normalizedArtist: album.normalizedArtist,
-                        year: album.year,
-                        cover_url: album.cover_url,
-                    },
-                    [],
-                    [album.artist]
-                );
+                try {
+                    const info = album.mbid
+                        ? await this.fetchAlbumInforByMbid(album.mbid.trim())
+                        : await this.fetchAlbumInfoByData(
+                            album.normalizedName,
+                            album.normalizedArtist
+                        );
 
-                await this.integrationRepo.syncAlbum(lastfmUser.id, {
-                    id: newAlbum.id,
-                    playcount: Number(album.playcount),
-                    lastTimeListened: null,
-                    tracksListened: null,
-                });
+                    if (!info || !info.tracks || !info.tracks.track) continue;
+
+                    const tags = info.tags.tag ?? [];
+
+                    const normalizedTags = tags.map((tag) => {
+                        return {
+                            name: normalizeTagName(tag.name),
+                        };
+                    });
+
+                    const normalizedTracks = await this.normalizeTracks(info);
+                    const normalizedSet = new Set();
+                    const tracks = normalizedTracks.filter((t) => {
+                        return (
+                            !normalizedSet.has(t.normalizedName) &&
+                            normalizedSet.add(t.normalizedName)
+                        );
+                    });
+                    const newAlbum = await this.albumRepo.create(
+                        {
+                            mbid: album.mbid === '' ? null : album.mbid,
+                            name: album.name,
+                            normalizedName: album.normalizedName,
+                            normalizedArtist: album.normalizedArtist,
+                            year: album.year ?? null,
+                            cover_url: album.cover_url,
+                        },
+                        [...normalizedTags],
+                        [album.artist],
+                        [...tracks]
+                    );
+
+                    await this.integrationRepo.syncAlbum(lastfmUser.id, {
+                        id: newAlbum.id,
+                        playcount: Number(album.playcount),
+                        lastTimeListened: null,
+                        tracksListened: null,
+                    });
+                } catch (err) {
+                    if (err instanceof AxiosError && err.status === 404) {
+                        console.log(err.config?.params['album'], err.config?.params['artist']);
+                    }
+                }
             }
 
             await this.integrationRepo.updateLastSynced(lastfmUsername.trim(), {
@@ -128,7 +146,7 @@ class IntegrationService {
         return albums;
     };
 
-    private normalizeArtists = async (albums: Array<IFetchData>) => {
+    private normalizeArtists = async (albums: Array<IUserAlbum>) => {
         const normalizedArtists = albums.map((album) => {
             return {
                 ...album,
@@ -140,7 +158,20 @@ class IntegrationService {
         return normalizedArtists;
     };
 
-    private normalizeAlbums = async (albums: Array<IFetchData>) => {
+    private normalizeTracks = async (album: IAlbumInfo) => {
+        const normalizedTracks = album.tracks.track.map((t) => {
+            return {
+                ...t,
+                name: t.name,
+                normalizedName: normalizeTrackName(t.name),
+                artist: t.artist,
+            };
+        });
+
+        return normalizedTracks;
+    };
+
+    private normalizeAlbums = async (albums: Array<IUserAlbum>) => {
         const normalizedArtists = await this.normalizeArtists(albums);
 
         const normalizedAlbums = normalizedArtists.map((album) => {
@@ -163,10 +194,38 @@ class IntegrationService {
             },
         });
 
-        const albums: Array<IFetchData> = response.data.topalbums.album;
+        const albums: Array<IUserAlbum> = response.data.topalbums.album;
         if (!albums) throw new IntegrationError(404, 'No albums found');
 
         return { albums, nextPage };
+    };
+
+    fetchAlbumInforByMbid = async (mbid: string) => {
+        const trimmedMbid = mbid.trim();
+        const response = await axios.get('', {
+            params: {
+                method: 'album.getinfo',
+                mbid: trimmedMbid,
+            },
+        });
+
+        const info: IAlbumInfo = response.data.album;
+        return info;
+    };
+
+    fetchAlbumInfoByData = async (album: string, artist: string) => {
+        const trimmedAlbum = album.trim();
+        const trimmedArtist = artist.trim();
+        const response = await axios.get('', {
+            params: {
+                method: 'album.getinfo',
+                album: trimmedAlbum,
+                artist: trimmedArtist,
+            },
+        });
+
+        const info: IAlbumInfo = response.data.album;
+        return info;
     };
 
     private findLastfmUser = async (lastfmUsername: string) => {
