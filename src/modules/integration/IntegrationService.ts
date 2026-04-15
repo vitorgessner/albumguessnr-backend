@@ -70,6 +70,10 @@ class IntegrationService {
                         };
                     });
 
+                    const releaseDate = 
+                    await this.fetchAlbumReleaseDate(album.normalizedName, album.normalizedArtist);
+                    const year: string = releaseDate.split('-')[0];
+
                     const normalizedTracks = await this.normalizeTracks(info);
                     const normalizedSet = new Set();
                     const tracks = normalizedTracks.filter((t) => {
@@ -84,7 +88,7 @@ class IntegrationService {
                             name: album.name,
                             normalizedName: album.normalizedName,
                             normalizedArtist: album.normalizedArtist,
-                            year: album.year ?? null,
+                            year: year ?? null,
                             cover_url: album.cover_url,
                         },
                         [...normalizedTags],
@@ -101,6 +105,8 @@ class IntegrationService {
                 } catch (err) {
                     if (err instanceof AxiosError && err.status === 404) {
                         console.log(err.config?.params['album'], err.config?.params['artist']);
+                    } else {
+                        console.log(err);
                     }
                 }
             }
@@ -226,6 +232,22 @@ class IntegrationService {
 
         const info: IAlbumInfo = response.data.album;
         return info;
+    };
+
+    fetchAlbumReleaseDate = async (album: string, artist: string) => {
+        const trimmedAlbum = album.trim();
+        const trimmedArtist = artist.trim();
+        const response = await axios.get('', {
+            baseURL: 'https://musicbrainz.org/ws/2/release-group',
+            params: {
+                query: trimmedAlbum + ' ' + trimmedArtist,
+                fomart: null,
+                api_key: null,
+            },
+        });
+
+        const year = response.data['release-groups'][0]['first-release-date'];
+        return year;
     };
 
     private findLastfmUser = async (lastfmUsername: string) => {

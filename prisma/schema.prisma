@@ -108,7 +108,7 @@ model Album {
   name                   String
   normalizedName         String
   normalizedArtist String
-  year                   DateTime?
+  year                   String?
   cover_url              String
   genres                 AlbumsGenre[]
   artists                AlbumsArtist[]
