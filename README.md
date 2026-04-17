@@ -1,9 +1,9 @@
 # AlbumGuessnr — Backend
 
-Este projeto consiste no Projeto Integrador do curso de Sistemas para Internet na Univali. 
+Este projeto consiste no Projeto Integrador do curso de Sistemas para Internet na Univali.
 
 O projeto se trata de um jogo de adivinhação de álbuns musicais integrado (atualmente apenas) ao Last.fm. O sistema segue um fluxo de puxar álbuns ouvidos
-pelo usuário usando seu username do Last.fm, normalizar nomes de álbuns, artistas, gêneros, tracks retirando palavras referentes a versionamento 
+pelo usuário usando seu username do Last.fm, normalizar nomes de álbuns, artistas, gêneros, tracks retirando palavras referentes a versionamento
 (como version, remastered, edition), salvar no banco e exibir ao usuário a capa do álbum borrada permitindo que ele adivinhe o que queira.
 
 ## Stack
@@ -42,6 +42,7 @@ Cada módulo possui sua própria camada de `Controller → Service → Repositor
 ## Módulos
 
 ### Auth
+
 - Registro com verificação de email (token via `randomBytes`, deletado após uso)
 - Login com JWT armazenado em HttpOnly cookie
 - Refresh token
@@ -49,6 +50,7 @@ Cada módulo possui sua própria camada de `Controller → Service → Repositor
 - Prevenção de user enumeration — diversos endpoints de registro retornam 200 genérico
 
 ### Integration (Last.fm)
+
 - Entidade `LastFmIntegration` separada do `User`/`Profile`
 - Sync de álbuns via `user.getTopAlbums` (50 álbuns por página, paginado)
 - Enriquecimento de dados via `album.getInfo` (tracks e gêneros/tags)
@@ -60,6 +62,7 @@ Cada módulo possui sua própria camada de `Controller → Service → Repositor
 - Álbuns não encontrados no Last.fm (404) são pulados sem interromper o sync
 
 ### Album
+
 - Deduplicação de tracks com mesmo `normalizedName` antes do insert
 
 ## Normalização
@@ -114,14 +117,17 @@ User
 - [ ] Embaralhamento de pixels da capa do álbum borrada
 
 ### Até 21/04
+
 - [ ] Ano do álbum (fonte: MusicBrainz via `mbid`, fallback por nome+artista ou mbid)
 - [ ] Timer no jogo (frontend)
 
 ### Até 28/04
+
 - [ ] Exibir quantas vezes o usuário adivinhou o álbum (`UserAlbumStats`)
 - [ ] Melhorias gerais e correção de bugs
 
 ### Pós-MVP
+
 - [ ] BullMQ + Redis (job queues para sync em background)
 - [ ] Last.fm e outros serviços de streaming de música OAuth
 - [ ] Índices de banco de dados

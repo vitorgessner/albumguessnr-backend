@@ -46,6 +46,11 @@ class IntegrationRepository {
                                 genre: true,
                             },
                         },
+                        artists: {
+                            include: {
+                                artist: true,
+                            },
+                        },
                     },
                 },
             },
