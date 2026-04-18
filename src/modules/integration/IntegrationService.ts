@@ -11,9 +11,14 @@ import {
     normalizeTagName,
     normalizeTrackName,
 } from './utils/normalize.js';
-import type { IUserAlbum } from './types/IUserAlbum.js';
-import type { IAlbumInfo, IMBAlbum, IMBAlbumResponse } from './types/IAlbumInfo.js';
+import type { IUserAlbum, IUserAlbumWithInfo } from './types/IUserAlbum.js';
+import type {
+    IAlbumInfo,
+    IMBAlbum,
+    IMBAlbumResponse,
+} from './types/IAlbumInfo.js';
 import { AxiosError } from 'axios';
+import type { INormalizedArtist, INormalizedTrack } from './types/normalizedTypes.js';
 
 class IntegrationService {
     private integrationRepo: IntegrationRepository;
@@ -49,7 +54,8 @@ class IntegrationService {
 
             const { albums, nextPage } = await this.fetchTopAlbums(lastfmUsername);
 
-            const normalizedAlbums = await this.normalizeAlbums(albums);
+            const normalizedAlbums: Array<IUserAlbumWithInfo> = 
+                await this.normalizeAlbums(albums);
 
             for (const album of normalizedAlbums) {
                 try {
@@ -60,83 +66,33 @@ class IntegrationService {
                             album.normalizedArtist
                         );
 
-                    if (!info || !info.tracks || !info.tracks.track) continue;
+                    if (!info || !info.tracks || !info.tracks.track) 
+                        throw new IntegrationError(404, 'No tracks found');
 
-                    const musicBrainzAlbum = await this.fetchAlbumMusicBrainz(
+                    const musicBrainzAlbum = await this.fetchMusicBrainzAlbum(
                         album.normalizedName,
                         album.normalizedArtist,
                     );
 
-                    if (!musicBrainzAlbum) continue;
+                    if (!musicBrainzAlbum) 
+                        throw new IntegrationError(404, 'No MusicBrainz album found');
 
                     const year = musicBrainzAlbum['first-release-date'].split('-')[0];
 
-                    const tags = musicBrainzAlbum.tags ?? [];
+                    const tags: Array<{ name: string }> = await this.getTopTags(musicBrainzAlbum);
 
-                    const topTag = tags.reduce((acc, curr) => {
-                        if (acc.count < curr.count) {
-                            return curr;
-                        } else {
-                            return acc;
-                        }
-                    }, tags[0]);
+                    const normalizedArtists: Array<INormalizedArtist> = 
+                        await this.normalizeArtists(musicBrainzAlbum);
 
-                    const topTwoTag = tags
-                        .filter((tag) => tag.name !== topTag.name)
-                        .reduce((acc, curr) => {
-                            if (!acc) return;
-                            if (acc.count < curr.count) {
-                                return curr;
-                            } else {
-                                return acc;
-                            }
-                        }, tags.filter((tag) => tag.name !== topTag.name)[0]);
+                    const normalizedTracks: Array<INormalizedTrack> = 
+                        await this.normalizeTracks(info);
 
-                    const topThreeTag = tags
-                        .filter((tag) => tag.name !== topTag.name && tag.name !== topTwoTag?.name)
-                        .reduce((acc, curr) => {
-                            if (!acc) return;
-                            if (acc.count < curr.count) {
-                                return curr;
-                            } else {
-                                return acc;
-                            }
-                        }, tags.filter(
-                            (tag) => tag.name !== topTag.name && tag.name !== topTwoTag?.name
-                        )[0]);
-
-                    const topTags = [topTag];
-                    topTwoTag && topTags.push(topTwoTag);
-                    topThreeTag && topTags.push(topThreeTag);
-
-                    const normalizedTags = topTags.map((tag) => {
-                        return {
-                            name: normalizeTagName(tag.name),
-                        };
-                    });
-
-                    const normalizedArtists = await this.normalizeArtists(musicBrainzAlbum);
-
-                    const normalizedTracks = await this.normalizeTracks(info);
-                    const normalizedSet = new Set();
-                    const tracks = normalizedTracks.filter((t) => {
-                        return (
-                            !normalizedSet.has(t.normalizedName) &&
-                            normalizedSet.add(t.normalizedName)
-                        );
-                    });
-                    const newAlbum = await this.albumRepo.create(
-                        {
-                            mbid: album.mbid === '' ? null : album.mbid,
-                            name: album.name,
-                            normalizedName: album.normalizedName,
-                            normalizedArtist: album.normalizedArtist,
-                            year: year ?? null,
-                            cover_url: album.cover_url,
-                        },
-                        [...normalizedTags],
-                        [...normalizedArtists],
-                        [...tracks]
+                    const newAlbum = await this.createNewAlbum(
+                        album, 
+                        year, 
+                        tags, 
+                        normalizedArtists, 
+                        normalizedTracks
                     );
 
                     await this.integrationRepo.syncAlbum(lastfmUser.id, {
@@ -213,7 +169,6 @@ class IntegrationService {
                 ...t,
                 name: t.name,
                 normalizedName: normalizeTrackName(t.name),
-                artist: t.artist,
             };
         });
 
@@ -255,7 +210,7 @@ class IntegrationService {
         return { albums, nextPage };
     };
 
-    fetchAlbumInforByMbid = async (mbid: string) => {
+    private fetchAlbumInforByMbid = async (mbid: string) => {
         const trimmedMbid = mbid.trim();
         const response = await axios.get('', {
             params: {
@@ -268,7 +223,7 @@ class IntegrationService {
         return info;
     };
 
-    fetchAlbumInfoByData = async (album: string, artist: string) => {
+    private fetchAlbumInfoByData = async (album: string, artist: string) => {
         const trimmedAlbum = album.trim();
         const trimmedArtist = artist.trim();
         const response = await axios.get('', {
@@ -283,14 +238,16 @@ class IntegrationService {
         return info;
     };
 
-    fetchAlbumMusicBrainz = async (album: string, artist: string) => {
+    private fetchMusicBrainzAlbum = async (album: string, artist: string) => {
         const trimmedAlbum = album.trim();
         const trimmedArtist = artist.trim();
         const response = await axios.get<IMBAlbumResponse>('', {
             baseURL: 'https://musicbrainz.org/ws/2/release-group',
             params: {
-                query: trimmedAlbum + ' ' + trimmedArtist,
-                fomart: null,
+                query: `album:${trimmedAlbum} AND 
+                        artist:${trimmedArtist} AND 
+                        (primarytype:album OR primarytype:ep)`,
+                format: null,
                 api_key: null,
             },
         });
@@ -299,9 +256,77 @@ class IntegrationService {
         return response.data['release-groups'][0];
     };
 
-    private findLastfmUser = async (lastfmUsername: string) => {
-        const trimmedUsername = lastfmUsername.trim();
-        return await this.integrationRepo.findLastfmUserByUsername(trimmedUsername);
+    private getTopTags = async (album: IMBAlbum | undefined) => {
+        if (!album) return [];
+
+        const tags = album.tags ?? [];
+
+        const topTag = tags.reduce((acc, curr) => {
+            if (acc.count < curr.count) {
+                return curr;
+            } else {
+                return acc;
+            }
+        }, tags[0]);
+
+        const topTwoTag = tags
+            .filter((tag) => tag.name !== topTag.name)
+            .reduce((acc, curr) => {
+                if (!acc) return;
+                if (acc.count < curr.count) {
+                    return curr;
+                } else {
+                    return acc;
+                }
+            }, tags.filter((tag) => tag.name !== topTag.name)[0]);
+
+        const topThreeTag = tags
+            .filter((tag) => tag.name !== topTag.name && tag.name !== topTwoTag?.name)
+            .reduce((acc, curr) => {
+                if (!acc) return;
+                if (acc.count < curr.count) {
+                    return curr;
+                } else {
+                    return acc;
+                }
+            }, tags.filter(
+                (tag) => tag.name !== topTag.name && tag.name !== topTwoTag?.name
+            )[0]);
+
+        const topTags = [topTag];
+        topTwoTag && topTags.push(topTwoTag);
+        topThreeTag && topTags.push(topThreeTag);
+
+        const normalizedTags = topTags.map((tag) => {
+            return {
+                name: normalizeTagName(tag.name),
+            };
+        });
+
+        return normalizedTags;
+    };
+
+    private createNewAlbum = async (
+        album: IUserAlbumWithInfo, 
+        year: string | undefined, 
+        tags: Array<{ name: string }>, 
+        normalizedArtists: Array<INormalizedArtist>, 
+        normalizedTracks: Array<INormalizedTrack>) => {
+        const newAlbum = await this.albumRepo.create(
+            {
+                mbid: album.mbid === '' ? null : album.mbid,
+                name: album.name,
+                normalizedName: album.normalizedName,
+                normalizedArtist: album.normalizedArtist,
+                year: year ?? null,
+                cover_url: album.cover_url,
+            },
+            [...tags],
+            [...normalizedArtists],
+            [...normalizedTracks]
+        );
+
+        return newAlbum;
     };
 
     private lastFmUserExists = async (lastfmUsername: string) => {

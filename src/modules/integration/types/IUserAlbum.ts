@@ -20,3 +20,8 @@ export interface IUserAlbum {
     name: string;
     normalizedName: string;
 }
+
+export interface IUserAlbumWithInfo extends IUserAlbum {
+    normalizedArtist: string;
+    cover_url: string;
+}
