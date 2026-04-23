@@ -19,6 +19,10 @@ import integrationRoutes from './modules/integration/integrationRoutes.js';
 import AlbumRepository from './modules/album/AlbumRepository.js';
 import syncMiddleware from './modules/game/middlewares/syncMiddleware.js';
 import gameRoutes from './modules/game/gameRoutes.js';
+import GuessRepository from './modules/game/guess/GuessRepository.js';
+import GuessService from './modules/game/guess/GuessService.js';
+import GuessContoller from './modules/game/guess/GuessController.js';
+import guessRoutes from './modules/game/guess/guessRoutes.js';
 
 export const getApp = (): Application => {
     const app = express();
@@ -54,6 +58,10 @@ export const getApp = (): Application => {
     const profileService = new ProfileService(profileRepo);
     const profileController = new ProfileController(profileService);
 
+    const guessRepo = new GuessRepository();
+    const guessService = new GuessService(guessRepo);
+    const guessController = new GuessContoller(guessService);
+
     app.use('/', authRoutes(authController));
 
     app.use(authMiddleware);
@@ -62,8 +70,7 @@ export const getApp = (): Application => {
 
     const map = new Map<string, boolean>();
     app.use('/game', syncMiddleware(integrationService, map), gameRoutes());
-
-    app.get('/auth', authMiddleware, (req, res) => res.json({ message: 'vai tomando' }));
+    app.use('/guess', guessRoutes(guessController));
 
     app.use(globalErrorMiddleware);
 

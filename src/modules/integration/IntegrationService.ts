@@ -79,7 +79,7 @@ class IntegrationService {
 
                     const year = musicBrainzAlbum['first-release-date'].split('-')[0];
 
-                    const tags: Array<{ name: string }> = await this.getTopTags(musicBrainzAlbum);
+                    const tags = musicBrainzAlbum.tags;
 
                     const normalizedArtists: Array<INormalizedArtist> = 
                         await this.normalizeArtists(musicBrainzAlbum);
@@ -105,7 +105,7 @@ class IntegrationService {
                     if (err instanceof AxiosError && err.status === 404) {
                         console.log(err.config?.params['album'], err.config?.params['artist']);
                     } else {
-                        console.log(err);
+                        console.log(err.config?.params['album']);
                     }
                 }
             }
