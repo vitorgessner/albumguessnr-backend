@@ -28,6 +28,14 @@ const authRoutes = (controller: AuthController) => {
         controller.resendVerification(req, res)
     );
 
+    router.post('/forgot', setLimiter(60, 1), (req: Request, res: Response) =>
+        controller.forgot(req, res)
+    );
+
+    router.put('/:username/passwordChange', (req: Request, res: Response) =>
+        controller.changePassword(req, res)
+    );
+
     return router;
 };
 

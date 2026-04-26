@@ -82,6 +82,21 @@ class AuthController {
             .cookie('token', token, COOKIE_OPTIONS)
             .redirect(`${process.env.FRONTEND_URL!}/${username}/edit`);
     };
+
+    forgot = async (req: Request, res: Response) => {
+        this.authService.forgot(req.body.email);
+
+        res.json({ status: 'success', message: 'Verify your email' });
+    };
+
+    changePassword = async (req: Request, res: Response) => {
+        const { username } = req.params;
+        await this.authService.editPassword(username as string, req.body.password);
+
+        return res
+            .status(200)
+            .json({ status: 'success', message: 'Password changed, you may login now' });
+    };
 }
 
 export default AuthController;

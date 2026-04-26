@@ -11,7 +11,7 @@ import profileRoutes from './modules/profile/profileRoutes.js';
 import ProfileRepository from './modules/profile/ProfileRepository.js';
 import ProfileService from './modules/profile/ProfileService.js';
 import ProfileController from './modules/profile/ProfileController.js';
-import helmet from 'helmet';
+// import helmet from 'helmet';
 import IntegrationService from './modules/integration/IntegrationService.js';
 import IntegrationController from './modules/integration/IntegrationController.js';
 import IntegrationRepository from './modules/integration/IntegrationRepository.js';
@@ -21,7 +21,7 @@ import syncMiddleware from './modules/game/middlewares/syncMiddleware.js';
 import gameRoutes from './modules/game/gameRoutes.js';
 import GuessRepository from './modules/game/guess/GuessRepository.js';
 import GuessService from './modules/game/guess/GuessService.js';
-import GuessContoller from './modules/game/guess/GuessController.js';
+import GuessController from './modules/game/guess/GuessController.js';
 import guessRoutes from './modules/game/guess/guessRoutes.js';
 
 export const getApp = (): Application => {
@@ -60,7 +60,7 @@ export const getApp = (): Application => {
 
     const guessRepo = new GuessRepository();
     const guessService = new GuessService(guessRepo);
-    const guessController = new GuessContoller(guessService);
+    const guessController = new GuessController(guessService);
 
     app.use('/', authRoutes(authController));
 

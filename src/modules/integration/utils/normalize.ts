@@ -51,7 +51,7 @@ const EDITION_REGEX = new RegExp(
     'gi'
 );
 
-const FEAT_REGEX = /\s*(?:feat\.?|ft\.?)\s+.+$/gi;
+const FEAT_REGEX = /\s*[([]\s*(?:feat\.?|ft\.?)\s+[^)\]]*[)\]]?/gi;
 
 export const normalizeAlbumName = (name: string): string => {
     const nameWithoutEdition = name.replace(FEAT_REGEX, '').replace(EDITION_REGEX, '');

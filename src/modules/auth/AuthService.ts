@@ -82,22 +82,58 @@ class AuthService {
         if (!email) throw new ValidationError(400, 'Email is required');
 
         const emailExists = await this.authRepo.findByEmail(email);
-        if (emailExists) {
-            try {
-                if (!emailExists.emailVerified) {
-                    await this.sendTokenToEmail(email);
-                } else {
-                    await this.sendMail(
-                        email,
-                        'Email already verified',
-                        'Your email is already verified, please try logging in'
-                    );
-                }
-            } catch (err) {
-                console.log(err);
+        if (!emailExists) return;
+
+        try {
+            if (!emailExists.emailVerified) {
+                return await this.sendTokenToEmail(email);
             }
+
+            return await this.sendMail(
+                email,
+                'Email already verified',
+                'Your email is already verified, please try logging in'
+            );
+        } catch (err) {
+            console.log(err);
         }
         return { status: 'success' };
+    };
+
+    forgot = async (email: string) => {
+        if (!email) throw new ValidationError(400, 'Email is required');
+
+        const emailExists = await this.authRepo.findByEmail(email);
+        if (!emailExists) return;
+
+        const username = await this.authRepo.findByEmail(email);
+
+        try {
+            await this.sendMail(
+                email,
+                'Forgot your password',
+                '',
+                `<div>Please click on the link below to change your password. 
+                If it was not you, be worried</div>
+                <a href=
+                "${process.env.FRONTEND_URL}/auth/${username?.profile?.username}/passwordChange">
+                Change your password
+                </a>`
+            );
+        } catch (err) {
+            console.log(err);
+        }
+        return { status: 'success' };
+    };
+
+    editPassword = async (username: string, password: string) => {
+        if (!username) throw new ValidationError(404, 'Username should be provided');
+
+        const email = await this.authRepo.findByUsername(username).then((res) => res?.user.email);
+        if (!email) throw new AuthError(404, 'Email not found');
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+        return await this.authRepo.editPassword(email, hashedPassword);
     };
 
     verifyEmail = async (userVerificationToken: string) => {

@@ -3,7 +3,7 @@ import type GuessService from './GuessService.js';
 import AuthError from '../../auth/errors/AuthError.js';
 import GuessError from './errors/GuessError.js';
 
-class GuessContoller {
+class GuessController {
     private guessService: GuessService;
     constructor(guessService: GuessService) {
         this.guessService = guessService;
@@ -34,4 +34,4 @@ class GuessContoller {
     };
 }
 
-export default GuessContoller;
+export default GuessController;

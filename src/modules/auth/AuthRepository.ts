@@ -25,6 +25,24 @@ class AuthRepository {
     findByEmail = async (email: string) => {
         return await prisma.user.findUnique({
             where: { email },
+            include: {
+                profile: {
+                    select: {
+                        username: true,
+                    },
+                },
+            },
+        });
+    };
+
+    findByUsername = async (username: string) => {
+        return await prisma.profile.findUnique({
+            where: {
+                username,
+            },
+            include: {
+                user: true,
+            },
         });
     };
 
@@ -80,6 +98,17 @@ class AuthRepository {
                         email,
                     },
                 },
+            },
+        });
+    };
+
+    editPassword = async (email: string, password: string) => {
+        return await prisma.user.update({
+            where: {
+                email,
+            },
+            data: {
+                password,
             },
         });
     };
