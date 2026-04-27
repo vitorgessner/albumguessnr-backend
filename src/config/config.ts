@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import { env } from '../shared/config/env.js';
 
 dotenv.config();
 
@@ -7,7 +8,7 @@ interface IConfig {
 }
 
 const config: IConfig = {
-    port: Number(process.env.PORT) || 3000,
+    port: Number(env.PORT) || 3000,
 };
 
 export default config;

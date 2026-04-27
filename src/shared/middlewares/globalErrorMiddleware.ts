@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 import ValidationError from '../errors/ValidationError.js';
 import AuthError from '../../modules/auth/errors/AuthError.js';
+import z from 'zod';
 
 const globalErrorMiddleware = (err: Error, req: Request, res: Response, next: NextFunction) => {
     let statusCode = 500;

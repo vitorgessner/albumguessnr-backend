@@ -7,6 +7,7 @@ import jwt from 'jsonwebtoken';
 import transporter from './utils/transporter.js';
 import AuthError from './errors/AuthError.js';
 import type { UserCreateInput } from '../../generated/prisma/models.js';
+import { env } from '../../shared/config/env.js';
 
 class AuthService {
     private authRepo: AuthRepository;
@@ -42,7 +43,7 @@ class AuthService {
         const user = await this.validateEmail(email);
         const validUser = await this.validatePassword(user, password);
 
-        const token = jwt.sign({ id: validUser.id }, process.env.SECRET_JWT as jwt.Secret, {
+        const token = jwt.sign({ id: validUser.id }, env.SECRET_JWT as jwt.Secret, {
             expiresIn: '1h',
         });
 
@@ -116,7 +117,7 @@ class AuthService {
                 `<div>Please click on the link below to change your password. 
                 If it was not you, be worried</div>
                 <a href=
-                "${process.env.FRONTEND_URL}/auth/${username?.profile?.username}/passwordChange">
+                "${env.FRONTEND_URL}/auth/${username?.profile?.username}/passwordChange">
                 Change your password
                 </a>`
             );
@@ -148,7 +149,7 @@ class AuthService {
             verificationToken.token
         );
 
-        const token = jwt.sign({ id: validUser.id }, process.env.SECRET_JWT as jwt.Secret, {
+        const token = jwt.sign({ id: validUser.id }, env.SECRET_JWT as jwt.Secret, {
             expiresIn: '1h',
         });
 
@@ -183,7 +184,7 @@ class AuthService {
         return new Promise((resolve, reject) => {
             transporter.sendMail(
                 {
-                    from: process.env.EMAIL,
+                    from: env.EMAIL,
                     to,
                     subject,
                     text,
@@ -216,8 +217,8 @@ class AuthService {
             email,
             'Verify your account',
             'Please click on the link below to verify your account',
-            // eslint-disable-next-line max-len
-            `<a href="${process.env.BASE_URL}/verify/${userVerificationToken.token}">Verify your email</a>`
+
+            `<a href="${env.BASE_URL}/verify/${userVerificationToken.token}">Verify your email</a>`
         );
     };
 }

@@ -3,6 +3,7 @@ import AuthService from './AuthService.js';
 import COOKIE_OPTIONS from './utils/COOKIE_OPTIONS.js';
 import AuthError from './errors/AuthError.js';
 import type IntegrationService from '../integration/IntegrationService.js';
+import { env } from '../../shared/config/env.js';
 
 class AuthController {
     private authService: AuthService;
@@ -80,7 +81,7 @@ class AuthController {
 
         return res
             .cookie('token', token, COOKIE_OPTIONS)
-            .redirect(`${process.env.FRONTEND_URL!}/${username}/edit`);
+            .redirect(`${env.FRONTEND_URL}/profile/${username}/edit`);
     };
 
     forgot = async (req: Request, res: Response) => {

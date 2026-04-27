@@ -2,6 +2,7 @@ import AuthError from '../auth/errors/AuthError.js';
 import type ProfileRepository from './ProfileRepository.js';
 import fs from 'fs';
 import path from 'path';
+import { env } from '../../shared/config/env.js';
 
 class ProfileService {
     private profileRepo: ProfileRepository;
@@ -13,8 +14,7 @@ class ProfileService {
         const profile = await this.getProfile(id);
         if (!profile) throw new AuthError(404, 'Profile not found');
 
-        const defaultAvatar =
-            profile.avatar_url ?? `${process.env.BASE_URL}/profilePictures/default.svg`;
+        const defaultAvatar = profile.avatar_url ?? `${env.BASE_URL}/profilePictures/default.svg`;
 
         if (avatar_url) {
             const len = profile.avatar_url.split('/').length;

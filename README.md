@@ -108,30 +108,28 @@ User
 - [x] Normalização completa (álbum, artista, track, tag)
 - [x] Endpoint `/integration/albums` retornando álbuns com tracks e gêneros
 - [x] Sync middleware com fire-and-forget e básico
+- [x] Ano do álbum (fonte: MusicBrainz via `mbid`, fallback por nome+artista ou mbid)
+- [x] Timer no jogo (frontend)
+- [x] Forgot/reset password
+- [x] Zod — validação completa de env vars e inputs
 
 ## O que está aberto / falta fazer
 
-- [ ] Forgot/reset password
-- [ ] Zod — validação completa de env vars e inputs
-- [ ] Responsividade (frontend)
-- [ ] Embaralhamento de pixels da capa do álbum borrada
-
-### Até 21/04
-
-- [ ] Ano do álbum (fonte: MusicBrainz via `mbid`, fallback por nome+artista ou mbid)
-- [ ] Timer no jogo (frontend)
+- [ ] Comentar código
+- [ ] Refresh route
+- [ ] Melhoria no blur da cada do álbum
+- [ ] Melhorias gerais e correção de bugs
 
 ### Até 28/04
 
-- [ ] Exibir quantas vezes o usuário adivinhou o álbum (`UserAlbumStats`)
-- [ ] Melhorias gerais e correção de bugs
+- [x] Exibir quantas vezes o usuário adivinhou o álbum (`UserAlbumStats`)
 
 ### Pós-MVP
 
 - [ ] BullMQ + Redis (job queues para sync em background)
 - [ ] Last.fm e outros serviços de streaming de música OAuth
 - [ ] Índices de banco de dados
-- [ ] Migrar imagens de capa para Supabase Storage (remover pasta `public` do servidor)
+- [ ] Migrar imagens de usuário para Supabase Storage (remover pasta `public` do servidor)
 - [ ] Multiplayer
 
 ## Padrões e decisões de design

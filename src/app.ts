@@ -23,6 +23,7 @@ import GuessRepository from './modules/game/guess/GuessRepository.js';
 import GuessService from './modules/game/guess/GuessService.js';
 import GuessController from './modules/game/guess/GuessController.js';
 import guessRoutes from './modules/game/guess/guessRoutes.js';
+import { env } from './shared/config/env.js';
 
 export const getApp = (): Application => {
     const app = express();
@@ -34,7 +35,7 @@ export const getApp = (): Application => {
     // app.disable('x-powered-by');
     app.use(
         cors({
-            origin: process.env.FRONTEND_URL,
+            origin: env.FRONTEND_URL,
             credentials: true,
         })
     );
@@ -76,3 +77,4 @@ export const getApp = (): Application => {
 
     return app;
 };
+export { env };

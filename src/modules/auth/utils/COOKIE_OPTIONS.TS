@@ -1,6 +1,8 @@
+import { env } from "../../../shared/config/env.js";
+
 const COOKIE_OPTIONS = {
     httpOnly: true,
-    secure: process.env.NODE_ENV !== 'dev',
+    secure: env.NODE_ENV !== 'dev',
     sameSite: 'strict' as const,
 }
 
