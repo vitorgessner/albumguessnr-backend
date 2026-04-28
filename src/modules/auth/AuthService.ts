@@ -43,11 +43,12 @@ class AuthService {
         const user = await this.validateEmail(email);
         const validUser = await this.validatePassword(user, password);
 
-        const token = jwt.sign({ id: validUser.id }, env.SECRET_JWT as jwt.Secret, {
-            expiresIn: '1h',
-        });
+        const refreshToken = this.generateToken();
+        const refresh = await this.authRepo.createRefreshToken(refreshToken, email);
 
-        return token;
+        const token = this.generateJwtToken(validUser.id);
+
+        return { token, refresh: refresh.token };
     };
 
     register = async (email: string, password: string) => {
@@ -149,15 +150,41 @@ class AuthService {
             verificationToken.token
         );
 
-        const token = jwt.sign({ id: validUser.id }, env.SECRET_JWT as jwt.Secret, {
-            expiresIn: '1h',
-        });
+        const token = this.generateJwtToken(validUser.id);
 
         const user = await this.authRepo.findByIdWithProfileAndLastfmIntegration(
             verificationToken.user.id
         );
 
         return { token, username: user?.profile?.username, id: validUser.id };
+    };
+
+    refresh = async (token: string) => {
+        const refreshToken = await this.authRepo.findRefreshToken(token);
+        if (!refreshToken) throw new AuthError(401, 'Token not found');
+
+        if (refreshToken.expirationTime.getTime() < new Date(Date.now()).getTime()) {
+            throw new AuthError(401, 'Token expired');
+        }
+
+        await this.authRepo.deleteRefreshToken(refreshToken.token);
+
+        const newRefreshToken = this.generateToken();
+        const refresh = await this.authRepo.createRefreshToken(
+            newRefreshToken,
+            refreshToken.user.email
+        );
+
+        const accessToken = this.generateJwtToken(refreshToken.userId);
+
+        return { accessToken, refresh: refresh.token };
+    };
+
+    deleteRefreshToken = async (token: string) => {
+        const refreshToken = await this.authRepo.findRefreshToken(token);
+        if (!refreshToken) return;
+
+        return await this.authRepo.deleteRefreshToken(refreshToken.token);
     };
 
     private validateEmail = async (email: string) => {
@@ -178,6 +205,12 @@ class AuthService {
 
     private generateToken = () => {
         return randomBytes(32).toString('hex');
+    };
+
+    private generateJwtToken = (id: string) => {
+        return jwt.sign({ id }, env.SECRET_JWT as jwt.Secret, {
+            expiresIn: '1h',
+        });
     };
 
     private sendMail = (to: string, subject: string, text: string, html?: string) => {

@@ -112,12 +112,11 @@ User
 - [x] Timer no jogo (frontend)
 - [x] Forgot/reset password
 - [x] Zod — validação completa de env vars e inputs
+- [x] Refresh route
 
 ## O que está aberto / falta fazer
 
 - [ ] Comentar código
-- [ ] Refresh route
-- [ ] Melhoria no blur da cada do álbum
 - [ ] Melhorias gerais e correção de bugs
 
 ### Até 28/04

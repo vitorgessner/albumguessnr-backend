@@ -41,6 +41,8 @@ const authRoutes = (controller: AuthController) => {
         controller.resendVerification(req, res)
     );
 
+    router.post('/refresh', (req: Request, res: Response) => controller.refresh(req, res));
+
     router.post(
         '/forgot',
         setLimiter(60, 1),

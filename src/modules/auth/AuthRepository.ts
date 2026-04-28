@@ -102,6 +102,39 @@ class AuthRepository {
         });
     };
 
+    findRefreshToken = async (token: string) => {
+        return await prisma.refreshToken.findUnique({
+            where: {
+                token,
+            },
+            include: {
+                user: true,
+            },
+        });
+    };
+
+    deleteRefreshToken = async (token: string) => {
+        return await prisma.refreshToken.delete({
+            where: {
+                token,
+            },
+        });
+    };
+
+    createRefreshToken = async (token: string, email: string) => {
+        return await prisma.refreshToken.create({
+            data: {
+                token,
+                expirationTime: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7),
+                user: {
+                    connect: {
+                        email,
+                    },
+                },
+            },
+        });
+    };
+
     editPassword = async (email: string, password: string) => {
         return await prisma.user.update({
             where: {

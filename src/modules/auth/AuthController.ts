@@ -44,20 +44,35 @@ class AuthController {
         res.json({ status: 'success', message: 'Verify your email' });
     };
 
+    refresh = async (req: Request, res: Response) => {
+        const { refresh } = req.cookies;
+        const { accessToken, refresh: refreshToken } = await this.authService.refresh(refresh);
+
+        res.status(200)
+            .cookie('token', accessToken, COOKIE_OPTIONS(1000 * 60 * 60))
+            .cookie('refresh', refreshToken, COOKIE_OPTIONS(1000 * 60 * 60 * 24 * 7))
+            .json({ status: 'success', message: 'Authorization refreshed' });
+    };
+
     login = async (req: Request, res: Response) => {
         const { email, password } = req.body;
-        const token = await this.authService.login(email, password);
+        const { token, refresh } = await this.authService.login(email, password);
 
         return res
             .status(200)
-            .cookie('token', token, COOKIE_OPTIONS)
+            .cookie('token', token, COOKIE_OPTIONS(1000 * 60 * 60))
+            .cookie('refresh', refresh, COOKIE_OPTIONS(1000 * 60 * 60 * 24 * 7))
             .json({ status: 'success', message: 'Login successful' });
     };
 
     logout = async (req: Request, res: Response) => {
+        const { refresh } = req.cookies;
+        await this.authService.deleteRefreshToken(refresh);
+
         return res
             .status(200)
-            .clearCookie('token', COOKIE_OPTIONS)
+            .clearCookie('token', COOKIE_OPTIONS(1000 * 60 * 60))
+            .clearCookie('refresh', COOKIE_OPTIONS(1000 * 60 * 60 * 24 * 7))
             .json({ status: 'success', message: 'logged off' });
     };
 
@@ -80,7 +95,7 @@ class AuthController {
         }
 
         return res
-            .cookie('token', token, COOKIE_OPTIONS)
+            .cookie('token', token, COOKIE_OPTIONS(1000 * 60 * 60))
             .redirect(`${env.FRONTEND_URL}/profile/${username}/edit`);
     };
 
