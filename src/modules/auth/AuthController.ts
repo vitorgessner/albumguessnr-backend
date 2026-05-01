@@ -3,7 +3,6 @@ import AuthService from './AuthService.js';
 import COOKIE_OPTIONS from './utils/COOKIE_OPTIONS.js';
 import AuthError from './errors/AuthError.js';
 import type IntegrationService from '../integration/IntegrationService.js';
-import { env } from '../../shared/config/env.js';
 
 class AuthController {
     private authService: AuthService;
@@ -85,7 +84,7 @@ class AuthController {
 
     verifyUser = async (req: Request, res: Response) => {
         const { userVerificationToken } = req.params;
-        const { username, token, id } = await this.authService.verifyEmail(
+        const { username, token, refresh, id } = await this.authService.verifyEmail(
             userVerificationToken as string
         );
         try {
@@ -96,7 +95,9 @@ class AuthController {
 
         return res
             .cookie('token', token, COOKIE_OPTIONS(1000 * 60 * 60))
-            .redirect(`${env.FRONTEND_URL}/profile/${username}/edit`);
+            .cookie('refresh', refresh, COOKIE_OPTIONS(1000 * 60 * 60 * 24 * 7))
+            .status(200)
+            .json({ status: 'success', message: 'Valid token', username });
     };
 
     forgot = async (req: Request, res: Response) => {

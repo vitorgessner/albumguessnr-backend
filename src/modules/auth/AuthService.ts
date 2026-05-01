@@ -155,8 +155,17 @@ class AuthService {
         const user = await this.authRepo.findByIdWithProfileAndLastfmIntegration(
             verificationToken.user.id
         );
+        if (!user) throw new AuthError(404, 'user does not exists');
 
-        return { token, username: user?.profile?.username, id: validUser.id };
+        const refreshToken = this.generateToken();
+        const refresh = await this.authRepo.createRefreshToken(refreshToken, user?.email);
+
+        return {
+            token,
+            refresh: refresh.token,
+            username: user?.profile?.username,
+            id: validUser.id,
+        };
     };
 
     refresh = async (token: string) => {
@@ -246,12 +255,13 @@ class AuthService {
         await this.authRepo.deleteTokens(email);
         const token = this.generateToken();
         const userVerificationToken = await this.authRepo.createVerificationToken(token, email);
+        const verificationToken = userVerificationToken.token;
         await this.sendMail(
             email,
             'Verify your account',
             'Please click on the link below to verify your account',
 
-            `<a href="${env.BASE_URL}/verify/${userVerificationToken.token}">Verify your email</a>`
+            `<a href="${env.FRONTEND_URL}/verify/${verificationToken}">Verify your email</a>`
         );
     };
 }

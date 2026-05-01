@@ -23,6 +23,7 @@ const EDITION_KEYWORDS = [
     'sessions',
     'expanded',
     'extended',
+    'explicit',
     'mix',
     'mixes',
     'take',
