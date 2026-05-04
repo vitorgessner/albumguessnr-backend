@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 import ValidationError from '../errors/ValidationError.js';
 import AuthError from '../../modules/auth/errors/AuthError.js';
-import z from 'zod';
+import { PrismaClientValidationError } from '../../generated/prisma/internal/prismaNamespace.js';
 
 const globalErrorMiddleware = (err: Error, req: Request, res: Response, next: NextFunction) => {
     let statusCode = 500;
@@ -16,6 +16,12 @@ const globalErrorMiddleware = (err: Error, req: Request, res: Response, next: Ne
 
     if (err instanceof AuthError) {
         statusCode = err.statusCode;
+        message = err.message;
+        name = err.name;
+    }
+
+    if (err instanceof PrismaClientValidationError) {
+        statusCode = 400;
         message = err.message;
         name = err.name;
     }

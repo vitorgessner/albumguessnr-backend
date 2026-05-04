@@ -10,6 +10,20 @@ class ProfileService {
         this.profileRepo = profileRepo;
     }
 
+    getProfile = async (id: string) => {
+        const profile = await this.profileRepo.findByUserId(id);
+        if (!profile) return null;
+
+        return profile;
+    };
+
+    getProfileByUsername = async (username: string) => {
+        const profile = await this.profileRepo.findByUserUsername(username);
+        if (!profile) return null;
+
+        return profile;
+    };
+
     edit = async (id: string, username: string, bio: string, avatar_url?: string) => {
         const profile = await this.getProfile(id);
         if (!profile) throw new AuthError(404, 'Profile not found');
@@ -36,13 +50,6 @@ class ProfileService {
             bio,
             avatar_url ?? defaultAvatar
         );
-    };
-
-    getProfile = async (id: string) => {
-        const profile = await this.profileRepo.findByUserId(id);
-        if (!profile) return null;
-
-        return profile;
     };
 }
 

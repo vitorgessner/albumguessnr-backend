@@ -1,5 +1,4 @@
 import bcrypt from 'bcryptjs';
-import type { User } from '../../generated/prisma/client.js';
 import ValidationError from '../../shared/errors/ValidationError.js';
 import type AuthRepository from './AuthRepository.js';
 import { randomBytes } from 'node:crypto';
@@ -8,6 +7,7 @@ import transporter from './utils/transporter.js';
 import AuthError from './errors/AuthError.js';
 import type { UserCreateInput } from '../../generated/prisma/models.js';
 import { env } from '../../shared/config/env.js';
+import type { IUserWithUsername } from './types/User.js';
 
 class AuthService {
     private authRepo: AuthRepository;
@@ -48,7 +48,7 @@ class AuthService {
 
         const token = this.generateJwtToken(validUser.id);
 
-        return { token, refresh: refresh.token };
+        return { token, refresh: refresh.token, user: validUser };
     };
 
     register = async (email: string, password: string) => {
@@ -205,7 +205,7 @@ class AuthService {
         return user;
     };
 
-    private validatePassword = async (user: User, password: string) => {
+    private validatePassword = async (user: IUserWithUsername, password: string) => {
         const isValid = await bcrypt.compare(password, user.password);
         if (!isValid) throw new ValidationError(404, 'Email or password incorrect');
 

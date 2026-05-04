@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from 'express';
 import AuthError from '../errors/AuthError.js';
 import jwt from 'jsonwebtoken';
 import { env } from '../../../shared/config/env.js';
+import { unless } from 'express-unless';
 
 declare global {
     namespace Express {
@@ -12,6 +13,7 @@ declare global {
 }
 
 const authMiddleware = (req: Request, res: Response, next: NextFunction) => {
+    console.log(req.originalUrl, req.path, req.url);
     const token = req.cookies.token;
     if (!token) throw new AuthError(401, 'Invalid token format');
 
@@ -27,5 +29,7 @@ const authMiddleware = (req: Request, res: Response, next: NextFunction) => {
 
     next();
 };
+
+authMiddleware.unless = unless;
 
 export default authMiddleware;

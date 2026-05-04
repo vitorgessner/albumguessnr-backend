@@ -20,8 +20,6 @@ export default [
             prettier: prettier,
         },
         rules: {
-            // Enforce consistent indentation (4 spaces in this case)
-            indent: ['error', 4],
             // Enforce the use of single quotes for strings
             quotes: ['error', 'single'],
             // Enforce semicolons at the end of statements
@@ -32,6 +30,8 @@ export default [
             eqeqeq: ['error', 'always'],
             // Enforce a maximum line length (usually 80 or 100 characters)
             'max-len': ['error', { code: 100 }],
+            'no-unused-vars': 'off',
+            '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
             // Enable Prettier as a lint rule
             'prettier/prettier': [
                 'error',

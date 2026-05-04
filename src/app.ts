@@ -1,4 +1,4 @@
-import express, { type Application } from 'express';
+import express, { type Application, type NextFunction, type Request, type Response } from 'express';
 import cors from 'cors';
 import authRoutes from './modules/auth/authRoutes.js';
 import AuthController from './modules/auth/AuthController.js';
@@ -25,6 +25,11 @@ import GuessController from './modules/game/guess/GuessController.js';
 import guessRoutes from './modules/game/guess/guessRoutes.js';
 import { env } from './shared/config/env.js';
 
+export const asyncHandler =
+    (fn: (req: Request, res: Response, next: NextFunction) => Promise<unknown>) =>
+    (req: Request, res: Response, next: NextFunction) =>
+        Promise.resolve(fn(req, res, next)).catch(next);
+
 export const getApp = (): Application => {
     const app = express();
     // app.use(
@@ -33,6 +38,7 @@ export const getApp = (): Application => {
     //     })
     // );
     // app.disable('x-powered-by');
+    console.log(env.FRONTEND_URL);
     app.use(
         cors({
             origin: env.FRONTEND_URL,
@@ -65,7 +71,11 @@ export const getApp = (): Application => {
 
     app.use('/', authRoutes(authController));
 
-    app.use(authMiddleware);
+    app.use(
+        authMiddleware.unless({
+            path: ['/profile', { url: /^\/profile\/[\w-]+$/ }],
+        })
+    );
     app.use('/profile', profileRoutes(profileController));
     app.use('/integration', integrationRoutes(integrationController));
 

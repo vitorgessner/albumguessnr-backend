@@ -113,15 +113,13 @@ User
 - [x] Forgot/reset password
 - [x] Zod — validação completa de env vars e inputs
 - [x] Refresh route
+- [x] Exibir quantas vezes o usuário adivinhou o álbum (`UserAlbumStats`)
 
 ## O que está aberto / falta fazer
 
 - [ ] Comentar código
 - [ ] Melhorias gerais e correção de bugs
-
-### Até 28/04
-
-- [x] Exibir quantas vezes o usuário adivinhou o álbum (`UserAlbumStats`)
+- [ ] Zod schemas na edição de perfil
 
 ### Pós-MVP
 

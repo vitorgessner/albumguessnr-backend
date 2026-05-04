@@ -45,23 +45,24 @@ class AuthController {
 
     refresh = async (req: Request, res: Response) => {
         const { refresh } = req.cookies;
+        if (!refresh) throw new AuthError(401, 'No refresh token available');
         const { accessToken, refresh: refreshToken } = await this.authService.refresh(refresh);
 
         res.status(200)
-            .cookie('token', accessToken, COOKIE_OPTIONS(1000 * 60 * 60))
+            .cookie('token', accessToken, COOKIE_OPTIONS(1000 * 60 * 65))
             .cookie('refresh', refreshToken, COOKIE_OPTIONS(1000 * 60 * 60 * 24 * 7))
             .json({ status: 'success', message: 'Authorization refreshed' });
     };
 
     login = async (req: Request, res: Response) => {
         const { email, password } = req.body;
-        const { token, refresh } = await this.authService.login(email, password);
+        const { token, refresh, user } = await this.authService.login(email, password);
 
         return res
             .status(200)
-            .cookie('token', token, COOKIE_OPTIONS(1000 * 60 * 60))
+            .cookie('token', token, COOKIE_OPTIONS(1000 * 60 * 65))
             .cookie('refresh', refresh, COOKIE_OPTIONS(1000 * 60 * 60 * 24 * 7))
-            .json({ status: 'success', message: 'Login successful' });
+            .json({ status: 'success', message: 'Login successful', user });
     };
 
     logout = async (req: Request, res: Response) => {
@@ -70,7 +71,7 @@ class AuthController {
 
         return res
             .status(200)
-            .clearCookie('token', COOKIE_OPTIONS(1000 * 60 * 60))
+            .clearCookie('token', COOKIE_OPTIONS(1000 * 60 * 65))
             .clearCookie('refresh', COOKIE_OPTIONS(1000 * 60 * 60 * 24 * 7))
             .json({ status: 'success', message: 'logged off' });
     };
@@ -94,7 +95,7 @@ class AuthController {
         }
 
         return res
-            .cookie('token', token, COOKIE_OPTIONS(1000 * 60 * 60))
+            .cookie('token', token, COOKIE_OPTIONS(1000 * 60 * 65))
             .cookie('refresh', refresh, COOKIE_OPTIONS(1000 * 60 * 60 * 24 * 7))
             .status(200)
             .json({ status: 'success', message: 'Valid token', username });

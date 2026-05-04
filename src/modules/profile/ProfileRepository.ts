@@ -9,6 +9,31 @@ class ProfileRepository {
         });
     };
 
+    findByUserUsername = async (username: string) => {
+        return await prisma.profile.findUnique({
+            where: {
+                username,
+            },
+            include: {
+                user: {
+                    select: {
+                        lastfmIntegration: {
+                            select: {
+                                lastfmUsername: true,
+                            },
+                        },
+                        createdAt: true,
+                    },
+                },
+            },
+            omit: {
+                updatedAt: true,
+                userId: true,
+                id: true,
+            },
+        });
+    };
+
     edit = async (id: string, username: string, bio: string, avatar_url: string) => {
         return await prisma.profile.update({
             where: {

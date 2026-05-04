@@ -9,51 +9,80 @@ import {
     formSchema,
     registerSchema,
 } from './schemas/authSchema.js';
+import { asyncHandler } from '../../app.js';
 
 const authRoutes = (controller: AuthController) => {
     const router = Router();
-    router.get('/users', (req: Request, res: Response) => controller.getAllUsers(req, res));
-    router.get('/users/profiles', (req: Request, res: Response) =>
-        controller.getAllUsersWithProfile(req, res)
+
+    router.get(
+        '/users',
+        asyncHandler((req: Request, res: Response) => controller.getAllUsers(req, res))
     );
-    router.get('/users/lastfm', (req: Request, res: Response) =>
-        controller.getAllUsersWithLastfmIntegration(req, res)
+
+    router.get(
+        '/users/profiles',
+        asyncHandler((req: Request, res: Response) => controller.getAllUsersWithProfile(req, res))
     );
-    router.get('/me', authMiddleware, (req: Request, res: Response) => controller.me(req, res));
-    router.get('/verify/:userVerificationToken', setLimiter(15, 3), (req: Request, res: Response) =>
-        controller.verifyUser(req, res)
+
+    router.get(
+        '/users/lastfm',
+        asyncHandler((req: Request, res: Response) =>
+            controller.getAllUsersWithLastfmIntegration(req, res)
+        )
+    );
+
+    router.get(
+        '/me',
+        authMiddleware,
+        asyncHandler((req: Request, res: Response) => controller.me(req, res))
+    );
+
+    router.get(
+        '/verify/:userVerificationToken',
+        setLimiter(15, 3),
+        asyncHandler((req: Request, res: Response) => controller.verifyUser(req, res))
     );
 
     router.post(
         '/login',
         setLimiter(3, 10),
         validateBody(formSchema),
-        (req: Request, res: Response) => controller.login(req, res)
+        asyncHandler((req: Request, res: Response) => controller.login(req, res))
     );
-    router.post('/logout', (req: Request, res: Response) => controller.logout(req, res));
+    router.post(
+        '/logout',
+        asyncHandler((req: Request, res: Response) => controller.logout(req, res))
+    );
+
     router.post(
         '/register',
         setLimiter(0.1, 3),
         validateBody(registerSchema),
-        (req: Request, res: Response) => controller.create(req, res)
-    );
-    router.post('/resendVerification', setLimiter(10, 3), (req: Request, res: Response) =>
-        controller.resendVerification(req, res)
+        asyncHandler((req: Request, res: Response) => controller.create(req, res))
     );
 
-    router.post('/refresh', (req: Request, res: Response) => controller.refresh(req, res));
+    router.post(
+        '/resendVerification',
+        setLimiter(10, 3),
+        asyncHandler((req: Request, res: Response) => controller.resendVerification(req, res))
+    );
+
+    router.post(
+        '/refresh',
+        asyncHandler((req: Request, res: Response) => controller.refresh(req, res))
+    );
 
     router.post(
         '/forgot',
         setLimiter(60, 1),
         validateBody(forgotPasswordSchema),
-        (req: Request, res: Response) => controller.forgot(req, res)
+        asyncHandler((req: Request, res: Response) => controller.forgot(req, res))
     );
 
     router.put(
         '/:username/passwordChange',
         validateBody(changePasswordSchema),
-        (req: Request, res: Response) => controller.changePassword(req, res)
+        asyncHandler((req: Request, res: Response) => controller.changePassword(req, res))
     );
 
     return router;
