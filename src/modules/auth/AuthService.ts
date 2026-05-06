@@ -7,7 +7,7 @@ import transporter from './utils/transporter.js';
 import AuthError from './errors/AuthError.js';
 import type { UserCreateInput } from '../../generated/prisma/models.js';
 import { env } from '../../shared/config/env.js';
-import type { IUserWithUsername } from './types/User.js';
+import type { IUserWithUsername } from './types/user.js';
 
 class AuthService {
     private authRepo: AuthRepository;
@@ -48,7 +48,7 @@ class AuthService {
 
         const token = this.generateJwtToken(validUser.id);
 
-        return { token, refresh: refresh.token, user: validUser };
+        return { token, refresh: refresh.token, username: validUser.profile?.username };
     };
 
     register = async (email: string, password: string) => {
@@ -190,7 +190,7 @@ class AuthService {
     };
 
     deleteRefreshToken = async (token: string) => {
-        const refreshToken = await this.authRepo.findRefreshToken(token);
+        const refreshToken = await this.authRepo.findRefreshToken(token ?? '');
         if (!refreshToken) return;
 
         return await this.authRepo.deleteRefreshToken(refreshToken.token);

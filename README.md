@@ -121,6 +121,19 @@ User
 - [ ] Melhorias gerais e correção de bugs
 - [ ] Zod schemas na edição de perfil
 
+## Até 26/05
+
+- [x] Ver perfil de outros usuários
+- [x] Adicionar outros usuários, como amigos
+- [ ] Ao adivinhar um álbum, exibir amigos que adivinharam também
+- [ ] Ganhar pontos ao acertar características do álbum
+- [ ] Ganhar pontos de acordo com a velocidade da tentativa
+- [ ] Leaderboard de pontos entre amigos
+- [ ] Leaderboard global
+- [ ] Visualização de estatísticas no perfil do usuário
+- [ ] Exibir histórico de adivinhações
+- [ ] Filtros para o histórico de adivinhações
+
 ### Pós-MVP
 
 - [ ] BullMQ + Redis (job queues para sync em background)

@@ -1,4 +1,4 @@
-import express, { type Application, type NextFunction, type Request, type Response } from 'express';
+import express, { type Application } from 'express';
 import cors from 'cors';
 import authRoutes from './modules/auth/authRoutes.js';
 import AuthController from './modules/auth/AuthController.js';
@@ -24,11 +24,10 @@ import GuessService from './modules/game/guess/GuessService.js';
 import GuessController from './modules/game/guess/GuessController.js';
 import guessRoutes from './modules/game/guess/guessRoutes.js';
 import { env } from './shared/config/env.js';
-
-export const asyncHandler =
-    (fn: (req: Request, res: Response, next: NextFunction) => Promise<unknown>) =>
-    (req: Request, res: Response, next: NextFunction) =>
-        Promise.resolve(fn(req, res, next)).catch(next);
+import FriendsRepository from './modules/friends/FriendsRepository.js';
+import FriendsService from './modules/friends/FriendsService.js';
+import FriendsController from './modules/friends/FriendsController.js';
+import friendsRoutes from './modules/friends/friendsRoutes.js';
 
 export const getApp = (): Application => {
     const app = express();
@@ -69,6 +68,10 @@ export const getApp = (): Application => {
     const guessService = new GuessService(guessRepo);
     const guessController = new GuessController(guessService);
 
+    const friendRepo = new FriendsRepository();
+    const friendService = new FriendsService(friendRepo);
+    const friendController = new FriendsController(friendService);
+
     app.use('/', authRoutes(authController));
 
     app.use(
@@ -82,6 +85,8 @@ export const getApp = (): Application => {
     const map = new Map<string, boolean>();
     app.use('/game', syncMiddleware(integrationService, map), gameRoutes());
     app.use('/guess', guessRoutes(guessController));
+
+    app.use('/friend', friendsRoutes(friendController));
 
     app.use(globalErrorMiddleware);
 

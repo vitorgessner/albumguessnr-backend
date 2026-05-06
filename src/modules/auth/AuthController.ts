@@ -56,13 +56,13 @@ class AuthController {
 
     login = async (req: Request, res: Response) => {
         const { email, password } = req.body;
-        const { token, refresh, user } = await this.authService.login(email, password);
+        const { token, refresh, username } = await this.authService.login(email, password);
 
         return res
             .status(200)
             .cookie('token', token, COOKIE_OPTIONS(1000 * 60 * 65))
             .cookie('refresh', refresh, COOKIE_OPTIONS(1000 * 60 * 60 * 24 * 7))
-            .json({ status: 'success', message: 'Login successful', user });
+            .json({ status: 'success', message: 'Login successful', username });
     };
 
     logout = async (req: Request, res: Response) => {

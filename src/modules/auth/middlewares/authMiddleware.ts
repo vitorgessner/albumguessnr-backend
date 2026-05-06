@@ -13,7 +13,6 @@ declare global {
 }
 
 const authMiddleware = (req: Request, res: Response, next: NextFunction) => {
-    console.log(req.originalUrl, req.path, req.url);
     const token = req.cookies.token;
     if (!token) throw new AuthError(401, 'Invalid token format');
 

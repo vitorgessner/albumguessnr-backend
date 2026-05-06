@@ -65,6 +65,8 @@ class AuthRepository {
             include: {
                 profile: true,
                 lastfmIntegration: true,
+                receivedRequests: true,
+                sentRequests: true,
             },
             omit: {
                 password: true,

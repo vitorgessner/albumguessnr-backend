@@ -25,6 +25,8 @@ model User {
   lastfmIntegration   LastFmIntegration?  @relation(fields: [lastfmIntegrationId], references: [id])
   userAlbumScores     UserAlbumScores[]
   userAlbumStats      UserAlbumStats[]
+  sentRequests        UserFriends[]       @relation("sentRequests")
+  receivedRequests    UserFriends[]       @relation("receivedRequests")
 }
 
 model Profile {
@@ -96,6 +98,25 @@ model UserAlbumFamiliarity {
   @@index([lastFmIntegrationId])
 }
 
+model UserFriends {
+  sentRequestsId     String
+  sentRequests       User         @relation("sentRequests", fields: [sentRequestsId], references: [id])
+  receivedRequestsId String
+  receivedRequests   User         @relation("receivedRequests", fields: [receivedRequestsId], references: [id])
+  stat               FriendsStats
+  timesRequested     Int          @default(0)
+  timesRejected      Int          @default(0)
+  lastRequestedAt    DateTime     @default(now())
+
+  @@id([sentRequestsId, receivedRequestsId])
+}
+
+enum FriendsStats {
+  PENDING
+  FRIEND
+  DENIED
+}
+
 model Category {
   id              String            @id @default(uuid())
   name            String
@@ -107,7 +128,7 @@ model Album {
   mbid                   String?
   name                   String
   normalizedName         String
-  normalizedArtist String
+  normalizedArtist       String
   year                   String?
   cover_url              String
   genres                 AlbumsGenre[]
@@ -115,14 +136,14 @@ model Album {
   userAlbumFamiliarities UserAlbumFamiliarity[]
   userAlbumScores        UserAlbumScores[]
   userAlbumStats         UserAlbumStats[]
-  tracks Track[]
+  tracks                 Track[]
 
   @@unique([normalizedName, normalizedArtist])
 }
 
 model Genre {
   id     String        @id @default(uuid())
-  name   String @unique
+  name   String        @unique
   albums AlbumsGenre[]
 }
 
@@ -139,7 +160,7 @@ model Artist {
   id             String         @id @default(uuid())
   mbid           String?
   name           String
-  normalizedName String @unique
+  normalizedName String         @unique
   albums         AlbumsArtist[]
 }
 
@@ -153,11 +174,11 @@ model AlbumsArtist {
 }
 
 model Track {
-  id String @id @default(uuid())
-  name String
+  id             String @id @default(uuid())
+  name           String
   normalizedName String
-  albumId String
-  album Album @relation(fields: [albumId], references: [id])
+  albumId        String
+  album          Album  @relation(fields: [albumId], references: [id])
 
   @@unique([normalizedName, albumId])
 }
