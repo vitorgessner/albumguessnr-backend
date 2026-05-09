@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "FriendsStats" ADD VALUE 'CANCELLED_REQUEST';

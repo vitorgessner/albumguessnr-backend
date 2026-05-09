@@ -3,7 +3,12 @@ import type { UserCreateInput } from '../../generated/prisma/models.js';
 
 class AuthRepository {
     findAll = async () => {
-        return await prisma.user.findMany();
+        return await prisma.user.findMany({
+            omit: {
+                email: true,
+                password: true,
+            },
+        });
     };
 
     findAllWithProfile = async () => {

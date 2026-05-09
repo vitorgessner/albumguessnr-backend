@@ -5,11 +5,26 @@ import type FriendsRepository from './FriendsRepository.js';
 class FriendsService {
     constructor(private friendsRepo: FriendsRepository) {}
 
-    getFriends = async (userId: string) => {
-        const friends = await this.friendsRepo.findFriends(userId);
+    getFriends = async (username: string) => {
+        const user = await this.friendsRepo.findByUsername(username);
+        if (!user) throw new FriendError(404, 'User not found');
+
+        const friends = await this.friendsRepo.findFriends(user.user.id);
         if (!friends) return null;
 
         return friends;
+    };
+
+    getStatus = async (username: string, userId: string) => {
+        const user = await this.friendsRepo.findByUsername(username);
+        if (!user) throw new FriendError(404, 'User not found');
+
+        if (user.userId === userId) return null;
+
+        let friendStatus = await this.friendsRepo.findFriend(user.user.id, userId);
+        if (!friendStatus) friendStatus = await this.friendsRepo.findFriend(userId, user.user.id);
+
+        return friendStatus;
     };
 
     makeRequest = async (sentRequestsId: string, receivedRequestsId: string) => {
@@ -21,10 +36,17 @@ class FriendsService {
 
         const request = await this.friendsRepo.findRequest(sentRequestsId, receivedRequestsId);
         const requested = await this.friendsRepo.findRequest(receivedRequestsId, sentRequestsId);
+        console.log(request, requested);
 
         if (!request) {
             if (!requested)
                 return await this.friendsRepo.makeRequest(sentRequestsId, receivedRequestsId);
+
+            if (requested.stat === 'DENIED')
+                return await this.friendsRepo.deleteAndMakeRequest(
+                    sentRequestsId,
+                    receivedRequestsId
+                );
 
             if (requested.stat === 'PENDING')
                 return await this.friendsRepo.acceptRequest(sentRequestsId, receivedRequestsId);
@@ -45,15 +67,23 @@ class FriendsService {
             throw new FriendError(401, "You're already friends with this user");
 
         const timePassed =
-            (new Date().getTime() / 1000 / 60 / 60 - request.lastRequestedAt.getTime()) /
-            1000 /
-            60 /
-            60;
+            new Date().getTime() / 1000 / 60 - request.lastRequestedAt.getTime() / 1000 / 60;
+        console.log(timePassed);
 
-        if (timePassed < 1)
+        if (timePassed < 0.1)
             throw new FriendError(403, 'You should wait before making more request to this user');
 
         return await this.friendsRepo.makeRequest(sentRequestsId, receivedRequestsId);
+    };
+
+    cancelRequest = async (userId: string, receivedRequestsId: string) => {
+        const receivedRequestsUser = await this.friendsRepo.findUser(receivedRequestsId);
+        if (!receivedRequestsUser) throw new ValidationError(404, 'Requested user not found');
+
+        const request = await this.friendsRepo.findRequest(userId, receivedRequestsId);
+        if (!request) throw new FriendError(400, 'This user did not make a request to you');
+
+        return await this.friendsRepo.cancelRequest(userId, receivedRequestsId);
     };
 
     acceptRequest = async (userId: string, sentRequestsId: string) => {

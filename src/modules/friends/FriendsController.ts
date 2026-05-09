@@ -7,23 +7,38 @@ class FriendsController {
     constructor(private friendsService: FriendsService) {}
 
     getFriends = async (req: Request, res: Response) => {
-        const userId = req.userId;
-        if (!userId) throw new AuthError(401, 'Not logged in');
+        const username = req.params.username;
 
-        const friends = await this.friendsService.getFriends(userId);
+        if (!username) throw new ValidationError(400, 'No user provided');
+
+        const friends = await this.friendsService.getFriends(username as string);
 
         return res.status(200).json({ status: 'success', message: 'Friends fetched', friends });
     };
 
+    getStatus = async (req: Request, res: Response) => {
+        const userId = req.userId;
+        const username = req.params.username;
+
+        if (!username) throw new ValidationError(400, 'No user provided');
+        if (!userId) throw new AuthError(404, 'Not logged in');
+
+        const friendStatus = await this.friendsService.getStatus(username as string, userId);
+
+        return res
+            .status(200)
+            .json({ status: 'success', message: 'Friend status fetched', friendStatus });
+    };
+
     makeRequest = async (req: Request, res: Response) => {
         const userId = req.userId;
-        const { requestedUserId } = req.params;
+        const { receivedRequestsId } = req.params;
 
         if (!userId) throw new AuthError(401, 'Not logged in');
-        if (!requestedUserId)
+        if (!receivedRequestsId)
             throw new ValidationError(400, 'You have to include a user to make a request');
 
-        const request = await this.friendsService.makeRequest(userId, requestedUserId as string);
+        const request = await this.friendsService.makeRequest(userId, receivedRequestsId as string);
 
         if (!('length' in request))
             return res.status(200).json({ status: 'success', message: 'Request made', request });
@@ -31,33 +46,49 @@ class FriendsController {
         return res.status(200).json({ status: 'success', message: 'You are now friends', request });
     };
 
-    acceptRequest = async (req: Request, res: Response) => {
+    cancelRequest = async (req: Request, res: Response) => {
         const userId = req.userId;
-        const { requesterUserId } = req.params;
+        const { receivedRequestsId } = req.params;
 
         if (!userId) throw new AuthError(401, 'Not logged in');
-        if (!requesterUserId)
+        if (!receivedRequestsId)
+            throw new ValidationError(400, 'You have to include a user to cancel a request');
+
+        const request = await this.friendsService.cancelRequest(
+            userId,
+            receivedRequestsId as string
+        );
+
+        return res.status(200).json({ status: 'success', message: 'Request cancelled', request });
+    };
+
+    acceptRequest = async (req: Request, res: Response) => {
+        const userId = req.userId;
+        const { sentRequestsId } = req.params;
+
+        if (!userId) throw new AuthError(401, 'Not logged in');
+        if (!sentRequestsId)
             throw new ValidationError(
                 400,
                 'A user has to make a request to you for you to accept it'
             );
 
-        await this.friendsService.acceptRequest(userId, requesterUserId as string);
+        await this.friendsService.acceptRequest(userId, sentRequestsId as string);
         res.status(200).json({ status: 'success', message: 'You are now friends' });
     };
 
     denyRequest = async (req: Request, res: Response) => {
         const userId = req.userId;
-        const { requesterUserId } = req.params;
+        const { sentRequestsId } = req.params;
 
         if (!userId) throw new AuthError(401, 'Not logged in');
-        if (!requesterUserId)
+        if (!sentRequestsId)
             throw new ValidationError(
                 400,
                 'A user has to make a request to you for you to deny it'
             );
 
-        await this.friendsService.denyRequest(userId, requesterUserId as string);
+        await this.friendsService.denyRequest(userId, sentRequestsId as string);
         res.status(200).json({ status: 'success', message: 'You denied the request' });
     };
 

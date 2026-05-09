@@ -115,6 +115,7 @@ enum FriendsStats {
   PENDING
   FRIEND
   DENIED
+  CANCELLED_REQUEST
 }
 
 model Category {

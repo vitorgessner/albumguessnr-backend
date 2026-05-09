@@ -76,7 +76,12 @@ export const getApp = (): Application => {
 
     app.use(
         authMiddleware.unless({
-            path: ['/profile', { url: /^\/profile\/[\w-]+$/ }],
+            path: [
+                '/profile',
+                '/friend',
+                { url: /^\/profile\/[\w-]+$/ },
+                { url: /^\/friend\/[\w-]+$/, method: 'GET' },
+            ],
         })
     );
     app.use('/profile', profileRoutes(profileController));

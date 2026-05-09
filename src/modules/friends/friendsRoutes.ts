@@ -4,23 +4,29 @@ import type FriendsController from './FriendsController.js';
 const friendsRoutes = (controller: FriendsController) => {
     const router = Router();
 
-    router.get('/', (req: Request, res: Response) => controller.getFriends(req, res));
+    router.get('/:username', (req: Request, res: Response) => controller.getFriends(req, res));
 
-    router.post('/:requestedUserId', (req: Request, res: Response) =>
+    router.get('/:username/status', (req: Request, res: Response) =>
+        controller.getStatus(req, res)
+    );
+
+    router.post('/:receivedRequestsId', (req: Request, res: Response) =>
         controller.makeRequest(req, res)
     );
 
-    router.post('/accept/:requesterUserId', (req: Request, res: Response) =>
+    router.patch('/:receivedRequestsId', (req: Request, res: Response) =>
+        controller.cancelRequest(req, res)
+    );
+
+    router.post('/accept/:sentRequestsId', (req: Request, res: Response) =>
         controller.acceptRequest(req, res)
     );
 
-    router.post('/deny/:requesterUserId', (req: Request, res: Response) =>
+    router.post('/deny/:sentRequestsId', (req: Request, res: Response) =>
         controller.denyRequest(req, res)
     );
 
-    router.delete('/unfriend/:friendId', (req: Request, res: Response) =>
-        controller.unfriend(req, res)
-    );
+    router.delete('/:friendId', (req: Request, res: Response) => controller.unfriend(req, res));
 
     return router;
 };

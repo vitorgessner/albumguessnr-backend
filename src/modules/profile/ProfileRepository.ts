@@ -23,6 +23,7 @@ class ProfileRepository {
                             },
                         },
                         createdAt: true,
+                        id: true,
                     },
                 },
             },

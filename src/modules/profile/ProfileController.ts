@@ -15,13 +15,13 @@ class ProfileController {
         if (!username || username.length < 1)
             throw new ValidationError(400, 'Username should be on query param');
 
-        const user = await this.profileService.getProfileByUsername(username as string);
-        if (!user)
+        const profile = await this.profileService.getProfileByUsername(username as string);
+        if (!profile)
             return res
                 .status(200)
                 .json({ status: 'success', message: 'User data fetched', user: null });
 
-        return res.status(200).json({ status: 'success', message: 'User data fetched', user });
+        return res.status(200).json({ status: 'success', message: 'User data fetched', profile });
     };
 
     edit = async (req: Request, res: Response) => {
