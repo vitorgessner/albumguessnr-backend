@@ -16,6 +16,22 @@ class FriendsController {
         return res.status(200).json({ status: 'success', message: 'Friends fetched', friends });
     };
 
+    getFriendsWithAlbum = async (req: Request, res: Response) => {
+        const id = req.userId;
+        const albumId = req.params.albumId;
+
+        if (!id) throw new ValidationError(401, 'Not logged in');
+        if (!albumId) throw new ValidationError(400, 'No album id provided');
+
+        const friends = await this.friendsService.getFriendsWithAlbum(id, albumId as string);
+
+        return res.status(200).json({
+            status: 'success',
+            message: 'Friends that guessed the album fetched',
+            friends,
+        });
+    };
+
     getStatus = async (req: Request, res: Response) => {
         const userId = req.userId;
         const username = req.params.username;

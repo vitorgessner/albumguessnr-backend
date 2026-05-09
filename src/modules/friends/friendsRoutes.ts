@@ -6,6 +6,10 @@ const friendsRoutes = (controller: FriendsController) => {
 
     router.get('/:username', (req: Request, res: Response) => controller.getFriends(req, res));
 
+    router.get('/album/:albumId', (req: Request, res: Response) =>
+        controller.getFriendsWithAlbum(req, res)
+    );
+
     router.get('/:username/status', (req: Request, res: Response) =>
         controller.getStatus(req, res)
     );

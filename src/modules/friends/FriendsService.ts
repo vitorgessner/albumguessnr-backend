@@ -15,6 +15,19 @@ class FriendsService {
         return friends;
     };
 
+    getFriendsWithAlbum = async (id: string, albumId: string) => {
+        const user = await this.friendsRepo.findUser(id);
+        if (!user) throw new FriendError(404, 'User not found');
+
+        const album = await this.friendsRepo.findAlbum(albumId);
+        if (!album) throw new ValidationError(404, 'Album not found');
+
+        const friends = await this.friendsRepo.findFriendsWithAlbum(id, albumId);
+        if (!friends) return null;
+
+        return friends;
+    };
+
     getStatus = async (username: string, userId: string) => {
         const user = await this.friendsRepo.findByUsername(username);
         if (!user) throw new FriendError(404, 'User not found');

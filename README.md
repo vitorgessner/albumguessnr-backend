@@ -125,7 +125,7 @@ User
 
 - [x] Ver perfil de outros usuários
 - [x] Adicionar outros usuários, como amigos
-- [ ] Ao adivinhar um álbum, exibir amigos que adivinharam também
+- [x] Ao adivinhar um álbum, exibir amigos que adivinharam também
 - [ ] Ganhar pontos ao acertar características do álbum
 - [ ] Ganhar pontos de acordo com a velocidade da tentativa
 - [ ] Leaderboard de pontos entre amigos

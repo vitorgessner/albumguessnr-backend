@@ -12,6 +12,14 @@ class FriendsRepository {
         });
     };
 
+    findAlbum = async (id: string) => {
+        return await prisma.album.findUnique({
+            where: {
+                id,
+            },
+        });
+    };
+
     findByUsername = async (username: string) => {
         return await prisma.profile.findUnique({
             where: {
@@ -54,6 +62,33 @@ class FriendsRepository {
                         email: true,
                         emailVerified: true,
                         lastfmIntegrationId: true,
+                    },
+                },
+            },
+        });
+    };
+
+    findFriendsWithAlbum = async (id: string, albumId: string) => {
+        return await prisma.user.findMany({
+            where: {
+                receivedRequests: {
+                    some: {
+                        stat: 'FRIEND',
+                        sentRequestsId: id,
+                    },
+                },
+                userAlbumStats: {
+                    some: {
+                        albumId,
+                    },
+                },
+            },
+            select: {
+                id: true,
+                profile: {
+                    select: {
+                        avatar_url: true,
+                        username: true,
                     },
                 },
             },
