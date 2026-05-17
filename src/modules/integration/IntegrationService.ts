@@ -1,4 +1,3 @@
-/* eslint-disable prettier/prettier */
 import IntegrationRepository from './IntegrationRepository.js';
 import type AlbumRepository from '../album/AlbumRepository.js';
 import AuthError from '../auth/errors/AuthError.js';
@@ -12,11 +11,7 @@ import {
     normalizeTrackName,
 } from './utils/normalize.js';
 import type { IUserAlbum, IUserAlbumWithInfo } from './types/IUserAlbum.js';
-import type {
-    IAlbumInfo,
-    IMBAlbum,
-    IMBAlbumResponse,
-} from './types/IAlbumInfo.js';
+import type { IAlbumInfo, IMBAlbum, IMBAlbumResponse } from './types/IAlbumInfo.js';
 import { AxiosError } from 'axios';
 import type { INormalizedArtist, INormalizedTrack } from './types/normalizedTypes.js';
 
@@ -54,44 +49,43 @@ class IntegrationService {
 
             const { albums, nextPage } = await this.fetchTopAlbums(lastfmUsername);
 
-            const normalizedAlbums: Array<IUserAlbumWithInfo> = 
-                await this.normalizeAlbums(albums);
+            const normalizedAlbums: Array<IUserAlbumWithInfo> = await this.normalizeAlbums(albums);
 
             for (const album of normalizedAlbums) {
                 try {
                     const info = album.mbid
                         ? await this.fetchAlbumInforByMbid(album.mbid.trim())
                         : await this.fetchAlbumInfoByData(
-                            album.normalizedName,
-                            album.normalizedArtist
-                        );
+                              album.normalizedName,
+                              album.normalizedArtist
+                          );
 
-                    if (!info || !info.tracks || !info.tracks.track) 
+                    if (!info || !info.tracks || !info.tracks.track)
                         throw new IntegrationError(404, 'No tracks found');
 
                     const musicBrainzAlbum = await this.fetchMusicBrainzAlbum(
                         album.normalizedName,
-                        album.normalizedArtist,
+                        album.normalizedArtist
                     );
 
-                    if (!musicBrainzAlbum) 
+                    if (!musicBrainzAlbum)
                         throw new IntegrationError(404, 'No MusicBrainz album found');
 
                     const year = musicBrainzAlbum['first-release-date'].split('-')[0];
 
                     const tags = musicBrainzAlbum.tags;
 
-                    const normalizedArtists: Array<INormalizedArtist> = 
+                    const normalizedArtists: Array<INormalizedArtist> =
                         await this.normalizeArtists(musicBrainzAlbum);
 
-                    const normalizedTracks: Array<INormalizedTrack> = 
+                    const normalizedTracks: Array<INormalizedTrack> =
                         await this.normalizeTracks(info);
 
                     const newAlbum = await this.createNewAlbum(
-                        album, 
-                        year, 
-                        tags, 
-                        normalizedArtists, 
+                        album,
+                        year,
+                        tags,
+                        normalizedArtists,
                         normalizedTracks
                     );
 
@@ -105,7 +99,7 @@ class IntegrationService {
                     if (err instanceof AxiosError && err.status === 404) {
                         console.log(err.config?.params['album'], err.config?.params['artist']);
                     } else {
-                        console.log(err.config?.params['album']);
+                        console.log(err);
                     }
                 }
             }
@@ -252,7 +246,6 @@ class IntegrationService {
             },
         });
 
-
         return response.data['release-groups'][0];
     };
 
@@ -271,27 +264,31 @@ class IntegrationService {
 
         const topTwoTag = tags
             .filter((tag) => tag.name !== topTag.name)
-            .reduce((acc, curr) => {
-                if (!acc) return;
-                if (acc.count < curr.count) {
-                    return curr;
-                } else {
-                    return acc;
-                }
-            }, tags.filter((tag) => tag.name !== topTag.name)[0]);
+            .reduce(
+                (acc, curr) => {
+                    if (!acc) return;
+                    if (acc.count < curr.count) {
+                        return curr;
+                    } else {
+                        return acc;
+                    }
+                },
+                tags.filter((tag) => tag.name !== topTag.name)[0]
+            );
 
         const topThreeTag = tags
             .filter((tag) => tag.name !== topTag.name && tag.name !== topTwoTag?.name)
-            .reduce((acc, curr) => {
-                if (!acc) return;
-                if (acc.count < curr.count) {
-                    return curr;
-                } else {
-                    return acc;
-                }
-            }, tags.filter(
-                (tag) => tag.name !== topTag.name && tag.name !== topTwoTag?.name
-            )[0]);
+            .reduce(
+                (acc, curr) => {
+                    if (!acc) return;
+                    if (acc.count < curr.count) {
+                        return curr;
+                    } else {
+                        return acc;
+                    }
+                },
+                tags.filter((tag) => tag.name !== topTag.name && tag.name !== topTwoTag?.name)[0]
+            );
 
         const topTags = [topTag];
         topTwoTag && topTags.push(topTwoTag);
@@ -307,11 +304,12 @@ class IntegrationService {
     };
 
     private createNewAlbum = async (
-        album: IUserAlbumWithInfo, 
-        year: string | undefined, 
-        tags: Array<{ name: string }>, 
-        normalizedArtists: Array<INormalizedArtist>, 
-        normalizedTracks: Array<INormalizedTrack>) => {
+        album: IUserAlbumWithInfo,
+        year: string | undefined,
+        tags: Array<{ name: string }>,
+        normalizedArtists: Array<INormalizedArtist>,
+        normalizedTracks: Array<INormalizedTrack>
+    ) => {
         const newAlbum = await this.albumRepo.create(
             {
                 mbid: album.mbid === '' ? null : album.mbid,
@@ -331,17 +329,21 @@ class IntegrationService {
 
     private lastFmUserExists = async (lastfmUsername: string) => {
         const trimmedUsername = lastfmUsername.trim();
-        const response = await axios.get('', {
-            params: {
-                method: 'user.getinfo',
-                user: trimmedUsername,
-            },
-        });
+        try {
+            const response = await axios.get('', {
+                params: {
+                    method: 'user.getinfo',
+                    user: trimmedUsername,
+                },
+            });
 
-        if (response.data.message === 'User not found')
-            throw new IntegrationError(404, 'User not found');
+            return response.data.user;
+        } catch (err) {
+            if (err instanceof AxiosError && err.status === 404)
+                throw new IntegrationError(404, 'Last.fm user not found');
 
-        return response.data.user;
+            throw err;
+        }
     };
 }
 

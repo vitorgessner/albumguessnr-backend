@@ -18,12 +18,14 @@ model User {
   emailVerified       Boolean             @default(false)
   password            String
   createdAt           DateTime            @default(now())
+  totalScore          Int                 @default(0)
   profile             Profile?
   verificationToken   VerificationToken[]
   refreshToken        RefreshToken[]
   lastfmIntegrationId String?
   lastfmIntegration   LastFmIntegration?  @relation(fields: [lastfmIntegrationId], references: [id])
   userAlbumScores     UserAlbumScores[]
+  userGuessAttempts   GuessAttempt[]
   userAlbumStats      UserAlbumStats[]
   sentRequests        UserFriends[]       @relation("sentRequests")
   receivedRequests    UserFriends[]       @relation("receivedRequests")
@@ -62,16 +64,47 @@ model LastFmIntegration {
   userAlbumFamiliarities UserAlbumFamiliarity[]
 }
 
-model UserAlbumScores {
+model GuessAttempt {
+  id         String                 @id @default(uuid())
   userId     String
-  user       User     @relation(fields: [userId], references: [id])
+  user       User                   @relation(fields: [userId], references: [id])
   albumId    String
-  album      Album    @relation(fields: [albumId], references: [id])
-  gameModeId String
-  gameMode   Category @relation(fields: [gameModeId], references: [id])
-  bestScore  Int
+  album      Album                  @relation(fields: [albumId], references: [id])
+  date       DateTime               @default(now())
+  totalScore Int                    @default(0)
+  timeSpent  Int
+  categories GuessAttemptCategory[]
 
-  @@id([userId, albumId, gameModeId])
+  @@index([userId, albumId, date])
+  @@index([albumId])
+}
+
+model GuessAttemptCategory {
+  id             String       @id @default(uuid())
+  guessAttemptId String
+  guessAttempt   GuessAttempt @relation(fields: [guessAttemptId], references: [id])
+  category       GameCategory
+  score          Int          @default(0)
+}
+
+model UserAlbumScores {
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  albumId   String
+  album     Album    @relation(fields: [albumId], references: [id])
+  gameMode  GameCategory
+  date      DateTime @db.Date
+  bestScore Int      @default(0)
+
+  @@id([userId, albumId, gameMode, date])
+}
+
+enum GameCategory {
+  ALBUM
+  ARTIST
+  GENRE
+  YEAR
+  TRACKLIST
 }
 
 model UserAlbumStats {
@@ -118,12 +151,6 @@ enum FriendsStats {
   CANCELLED_REQUEST
 }
 
-model Category {
-  id              String            @id @default(uuid())
-  name            String
-  userAlbumScores UserAlbumScores[]
-}
-
 model Album {
   id                     String                 @id @default(uuid())
   mbid                   String?
@@ -136,6 +163,7 @@ model Album {
   artists                AlbumsArtist[]
   userAlbumFamiliarities UserAlbumFamiliarity[]
   userAlbumScores        UserAlbumScores[]
+  guessAttempts          GuessAttempt[]
   userAlbumStats         UserAlbumStats[]
   tracks                 Track[]
 

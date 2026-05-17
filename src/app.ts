@@ -28,6 +28,10 @@ import FriendsRepository from './modules/friends/FriendsRepository.js';
 import FriendsService from './modules/friends/FriendsService.js';
 import FriendsController from './modules/friends/FriendsController.js';
 import friendsRoutes from './modules/friends/friendsRoutes.js';
+import ScoringRepository from './modules/scoring/ScoringRepository.js';
+import ScoringService from './modules/scoring/ScoringService.js';
+import ScoringController from './modules/scoring/ScoringController.js';
+import scoringRoutes from './modules/scoring/scoringRoutes.js';
 
 export const getApp = (): Application => {
     const app = express();
@@ -37,7 +41,6 @@ export const getApp = (): Application => {
     //     })
     // );
     // app.disable('x-powered-by');
-    console.log(env.FRONTEND_URL);
     app.use(
         cors({
             origin: env.FRONTEND_URL,
@@ -72,6 +75,15 @@ export const getApp = (): Application => {
     const friendService = new FriendsService(friendRepo);
     const friendController = new FriendsController(friendService);
 
+    const scoringRepo = new ScoringRepository();
+    const scoringService = new ScoringService(scoringRepo);
+    const scoringController = new ScoringController(scoringService);
+
+    app.use((req, res, next) => {
+        res.set('Cache-Control', 'no-store');
+        next();
+    });
+
     app.use('/', authRoutes(authController));
 
     app.use(
@@ -92,6 +104,8 @@ export const getApp = (): Application => {
     app.use('/guess', guessRoutes(guessController));
 
     app.use('/friend', friendsRoutes(friendController));
+
+    app.use('/scoring', scoringRoutes(scoringController));
 
     app.use(globalErrorMiddleware);
 

@@ -3,8 +3,9 @@ import ValidationError from '../errors/ValidationError.js';
 import AuthError from '../../modules/auth/errors/AuthError.js';
 import { PrismaClientValidationError } from '../../generated/prisma/internal/prismaNamespace.js';
 import FriendError from '../../modules/friends/errors/FriendError.js';
+import IntegrationError from '../../modules/integration/errors/IntegrationError.js';
 
-const globalErrorMiddleware = (err: Error, req: Request, res: Response, next: NextFunction) => {
+const globalErrorMiddleware = (err: Error, req: Request, res: Response, _: NextFunction) => {
     let statusCode = 500;
     let message = 'Something went wrong';
     let name = 'Server Error';
@@ -16,6 +17,12 @@ const globalErrorMiddleware = (err: Error, req: Request, res: Response, next: Ne
     }
 
     if (err instanceof AuthError) {
+        statusCode = err.statusCode;
+        message = err.message;
+        name = err.name;
+    }
+
+    if (err instanceof IntegrationError) {
         statusCode = err.statusCode;
         message = err.message;
         name = err.name;

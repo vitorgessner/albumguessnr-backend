@@ -12,7 +12,17 @@ class FriendsService {
         const friends = await this.friendsRepo.findFriends(user.user.id);
         if (!friends) return null;
 
-        return friends;
+        const formattedFriends = friends.map((f) => {
+            return {
+                ...f,
+                receivedRequests: {
+                    ...f.receivedRequests,
+                    totalScore: Math.round(f.receivedRequests.totalScore / 100),
+                },
+            };
+        });
+
+        return formattedFriends;
     };
 
     getFriendsWithAlbum = async (id: string, albumId: string) => {
@@ -24,6 +34,8 @@ class FriendsService {
 
         const friends = await this.friendsRepo.findFriendsWithAlbum(id, albumId);
         if (!friends) return null;
+
+        friends.sort((a, b) => b.bestScore - a.bestScore);
 
         return friends;
     };

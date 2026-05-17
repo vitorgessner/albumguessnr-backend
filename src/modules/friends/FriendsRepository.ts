@@ -1,4 +1,5 @@
 import { prisma } from '../../config/prisma.js';
+import { Prisma } from '../../generated/prisma/client.js';
 
 class FriendsRepository {
     findUser = async (id: string) => {
@@ -69,7 +70,38 @@ class FriendsRepository {
     };
 
     findFriendsWithAlbum = async (id: string, albumId: string) => {
-        return await prisma.user.findMany({
+        const ids = await prisma.user
+            .findMany({
+                where: {
+                    receivedRequests: {
+                        some: {
+                            stat: 'FRIEND',
+                            sentRequestsId: id,
+                        },
+                    },
+                },
+                select: {
+                    id: true,
+                },
+            })
+            .then((res) => res.map((r) => r.id));
+
+        ids.push(id);
+
+        const pointsPerDay: Array<{ userId: string; max: number }> = await prisma.$queryRaw`
+            SELECT
+                "userId", MAX("totalSum") FROM (
+                    SELECT "userId", SUM("bestScore") AS "totalSum"
+                    FROM "UserAlbumScores"
+                    WHERE "albumId" = ${albumId} AND "userId" IN (${Prisma.join(ids)})
+                    GROUP BY DATE_TRUNC('day', "date"), "albumId", "userId"
+                ) AS "TotalPoints"
+            GROUP BY "userId"
+        `;
+
+        // console.log(pointsPerDay);
+
+        const friends = await prisma.user.findMany({
             where: {
                 receivedRequests: {
                     some: {
@@ -93,6 +125,32 @@ class FriendsRepository {
                 },
             },
         });
+
+        const currentUser = await prisma.user.findUnique({
+            where: { id },
+            select: {
+                id: true,
+                profile: {
+                    select: {
+                        avatar_url: true,
+                        username: true,
+                    },
+                },
+            },
+        });
+
+        const allUsers = currentUser ? [currentUser, ...friends] : friends;
+
+        const friendsWithScore = allUsers.map((f) => {
+            return {
+                ...f,
+                bestScore: Math.round(
+                    Number(pointsPerDay.filter((p) => p.userId === f.id)[0]?.max) / 100
+                ),
+            };
+        });
+
+        return friendsWithScore;
     };
 
     findFriend = async (profileId: string, userId: string) => {
