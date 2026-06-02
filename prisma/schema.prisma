@@ -18,7 +18,7 @@ model User {
   emailVerified       Boolean             @default(false)
   password            String
   createdAt           DateTime            @default(now())
-  totalScore          Int                 @default(0)
+  userStats           UserStats?
   profile             Profile?
   verificationToken   VerificationToken[]
   refreshToken        RefreshToken[]
@@ -29,6 +29,24 @@ model User {
   userAlbumStats      UserAlbumStats[]
   sentRequests        UserFriends[]       @relation("sentRequests")
   receivedRequests    UserFriends[]       @relation("receivedRequests")
+}
+
+model UserStats {
+  id                    String @id @default(uuid())
+  userId                String @unique
+  user                  User   @relation(fields: [userId], references: [id])
+  totalScore            Int    @default(0)
+  guessedDistinctAlbums Int    @default(0)
+  guessedAlbums         Int    @default(0)
+  rightGuessedAlbums    Int    @default(0)
+  guessedArtists        Int    @default(0)
+  rightGuessedArtist    Int    @default(0)
+  guessedGenres         Int    @default(0)
+  rightGuessedGenres    Int    @default(0)
+  guessedYears          Int    @default(0)
+  rightGuessedYears     Int    @default(0)
+  guessedTracks         Int    @default(0)
+  rightGuessedTracks    Int    @default(0)
 }
 
 model Profile {
@@ -65,18 +83,30 @@ model LastFmIntegration {
 }
 
 model GuessAttempt {
-  id         String                 @id @default(uuid())
-  userId     String
-  user       User                   @relation(fields: [userId], references: [id])
-  albumId    String
-  album      Album                  @relation(fields: [albumId], references: [id])
-  date       DateTime               @default(now())
-  totalScore Int                    @default(0)
-  timeSpent  Int
-  categories GuessAttemptCategory[]
+  id            String                 @id @default(uuid())
+  userId        String
+  user          User                   @relation(fields: [userId], references: [id])
+  albumId       String
+  album         Album                  @relation(fields: [albumId], references: [id])
+  date          DateTime               @default(now())
+  totalScore    Int                    @default(0)
+  tracksHit     Int                    @default(0)
+  timeSpent     Int
+  categories    GuessAttemptCategory[]
+  guessedTracks GuessedTrack[]
 
   @@index([userId, albumId, date])
   @@index([albumId])
+}
+
+model GuessedTrack {
+  trackId        String
+  track          Track        @relation(fields: [trackId], references: [id])
+  guessAttemptId String
+  guessAttempt   GuessAttempt @relation(fields: [guessAttemptId], references: [id])
+  isCorrect      Boolean
+
+  @@id([trackId, guessAttemptId])
 }
 
 model GuessAttemptCategory {
@@ -89,12 +119,12 @@ model GuessAttemptCategory {
 
 model UserAlbumScores {
   userId    String
-  user      User     @relation(fields: [userId], references: [id])
+  user      User         @relation(fields: [userId], references: [id])
   albumId   String
-  album     Album    @relation(fields: [albumId], references: [id])
+  album     Album        @relation(fields: [albumId], references: [id])
   gameMode  GameCategory
-  date      DateTime @db.Date
-  bestScore Int      @default(0)
+  date      DateTime     @db.Date
+  bestScore Int          @default(0)
 
   @@id([userId, albumId, gameMode, date])
 }
@@ -203,11 +233,12 @@ model AlbumsArtist {
 }
 
 model Track {
-  id             String @id @default(uuid())
+  id             String         @id @default(uuid())
   name           String
   normalizedName String
   albumId        String
-  album          Album  @relation(fields: [albumId], references: [id])
+  album          Album          @relation(fields: [albumId], references: [id])
+  guessedTracks  GuessedTrack[]
 
   @@unique([normalizedName, albumId])
 }

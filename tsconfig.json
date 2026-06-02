@@ -6,18 +6,17 @@
         "outDir": "./dist",
         // Environment Settings
         // See also https://aka.ms/tsconfig/module
-        "module": "nodenext",
+        "module": "commonjs",
         "target": "esnext",
-        "types": [],
-        "moduleResolution": "nodenext",
+        // "moduleResolution": "nodenext",
         "esModuleInterop": true,
         "forceConsistentCasingInFileNames": true,
         "resolveJsonModule": true,
         "noImplicitReturns": true,
         "noFallthroughCasesInSwitch": true,
         // For nodejs:
-        // "lib": ["esnext"],
-        // "types": ["node"],
+        "lib": ["ES2020"],
+        "types": ["node"],
         // and npm install -D @types/node
 
         // Other Outputs
@@ -40,7 +39,7 @@
         // Recommended Options
         "strict": true,
         "jsx": "react-jsx",
-        "verbatimModuleSyntax": true,
+        // "verbatimModuleSyntax": true,
         "isolatedModules": true,
         "noUncheckedSideEffectImports": true,
         "moduleDetection": "force",

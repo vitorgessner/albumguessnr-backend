@@ -8,6 +8,11 @@ interface GuessAttemptCategoryWithCategoryAndScore {
     score: number;
 }
 
+interface GuessedTracklist {
+    trackId: string;
+    isCorrect: boolean;
+}
+
 class ScoringRepository {
     constructor() {}
 
@@ -36,12 +41,16 @@ class ScoringRepository {
         date: Date,
         totalScore: number,
         timeSpent: number,
-        categories: Array<GuessAttemptCategoryWithCategoryAndScore>
+        categories: Array<GuessAttemptCategoryWithCategoryAndScore>,
+        guessedTracks: Array<GuessedTracklist>
     ) => {
         await prisma.$transaction(async (tx: PrismaClient) => {
+            console.time('findBestScore');
             const previousScore = await this.findBestScore(userId, albumId, tx);
+            console.timeEnd('findBestScore');
 
             if (!previousScore._max.totalScore || previousScore._max.totalScore < totalScore) {
+                console.time('incrementUserTotalScore');
                 await this.incrementUserTotalScore(
                     userId,
                     albumId,
@@ -50,11 +59,26 @@ class ScoringRepository {
                     totalScore,
                     tx
                 );
+                console.timeEnd('incrementUserTotalScore');
+                console.time('deletePreviousScore');
                 await this.deletePreviousScore(userId, albumId, date, categories, tx);
+                console.timeEnd('deletePreviousScore');
+                console.time('addNewBestScore');
                 await this.addNewBestScore(userId, albumId, date, categories, tx);
+                console.timeEnd('addNewBestScore');
             }
 
-            await this.makeGuessAttempt(userId, albumId, timeSpent, totalScore, categories, tx);
+            console.time('makeGuessAttempt');
+            await this.makeGuessAttempt(
+                userId,
+                albumId,
+                timeSpent,
+                totalScore,
+                categories,
+                guessedTracks,
+                tx
+            );
+            console.timeEnd('makeGuessAttempt');
         });
     };
 
@@ -144,9 +168,9 @@ class ScoringRepository {
 
         const oldBestScore = oldBestScores.reduce((acc, cur) => acc + cur, 0);
 
-        return await client.user.update({
+        return await client.userStats.update({
             where: {
-                id: userId,
+                userId,
             },
             data: {
                 totalScore: {
@@ -162,19 +186,29 @@ class ScoringRepository {
         timeSpent: number,
         totalScore: number,
         categories: Array<GuessAttemptCategoryWithCategoryAndScore>,
+        guessedTracks: Array<GuessedTracklist>,
         tx?: Prisma.TransactionClient
     ) => {
         const client = tx || prisma;
+        const rightAnswers =
+            guessedTracks.length > 0 ? guessedTracks.filter((gt) => gt.isCorrect).length : -1;
         return await client.guessAttempt.create({
             data: {
                 userId,
                 albumId,
                 timeSpent,
                 totalScore,
+                tracksHit: rightAnswers,
                 categories: {
                     create: categories.map((c) => ({
                         category: c.category,
                         score: c.score,
+                    })),
+                },
+                guessedTracks: {
+                    create: guessedTracks?.map((gt) => ({
+                        trackId: gt.trackId,
+                        isCorrect: gt.isCorrect,
                     })),
                 },
             },

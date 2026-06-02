@@ -17,7 +17,7 @@ class FriendsService {
                 ...f,
                 receivedRequests: {
                     ...f.receivedRequests,
-                    totalScore: Math.round(f.receivedRequests.totalScore / 100),
+                    totalScore: Math.round((f.receivedRequests.userStats?.totalScore ?? 0) / 100),
                 },
             };
         });

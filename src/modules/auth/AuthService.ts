@@ -35,9 +35,9 @@ class AuthService {
 
     me = async (id: string) => {
         const me = await this.authRepo.findByIdWithProfileAndLastfmIntegration(id);
-        if (!me) return null;
+        if (!me || !me.userStats) return null;
 
-        me.totalScore = Math.round(me.totalScore / 100);
+        me.userStats.totalScore = Math.round(me.userStats.totalScore / 100);
 
         return me;
     };

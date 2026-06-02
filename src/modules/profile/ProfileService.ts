@@ -19,9 +19,9 @@ class ProfileService {
 
     getProfileByUsername = async (username: string) => {
         const profile = await this.profileRepo.findByUserUsername(username);
-        if (!profile) return null;
+        if (!profile || !profile.user.userStats) return null;
 
-        profile.user.totalScore = Math.round(profile.user.totalScore / 100);
+        profile.user.userStats.totalScore = Math.round(profile.user.userStats.totalScore / 100);
 
         return profile;
     };

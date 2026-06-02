@@ -7,6 +7,9 @@ const axiosInstance = axios.create({
         api_key: env.API_KEY,
         format: 'json',
     },
+    headers: {
+        'User-Agent': 'AlbumGuessnr/0.0.0 ( gessnervgg@gmail.com )',
+    },
 });
 
 export default axiosInstance;

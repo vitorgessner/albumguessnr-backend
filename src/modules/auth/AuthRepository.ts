@@ -72,6 +72,7 @@ class AuthRepository {
                 lastfmIntegration: true,
                 receivedRequests: true,
                 sentRequests: true,
+                userStats: true,
             },
             omit: {
                 password: true,
@@ -90,6 +91,9 @@ class AuthRepository {
                         avatar_url: 'http://localhost:3000/profilePictures/default.svg',
                         bio: '',
                     },
+                },
+                userStats: {
+                    create: {},
                 },
             },
         });

@@ -32,6 +32,11 @@ import ScoringRepository from './modules/scoring/ScoringRepository.js';
 import ScoringService from './modules/scoring/ScoringService.js';
 import ScoringController from './modules/scoring/ScoringController.js';
 import scoringRoutes from './modules/scoring/scoringRoutes.js';
+import LeaderboardsController from './modules/leaderboards/LeaderboardsController.js';
+import LeaderboardsRepository from './modules/leaderboards/LeaderboardsRepository.js';
+import LeaderboardsService from './modules/leaderboards/LeaderboardsService.js';
+import leaderboardsRoutes from './modules/leaderboards/leaderboardsRoutes.js';
+import StatsRepository from './modules/stats/StatsRepository.js';
 
 export const getApp = (): Application => {
     const app = express();
@@ -75,9 +80,15 @@ export const getApp = (): Application => {
     const friendService = new FriendsService(friendRepo);
     const friendController = new FriendsController(friendService);
 
+    const statsRepo = new StatsRepository();
+
     const scoringRepo = new ScoringRepository();
-    const scoringService = new ScoringService(scoringRepo);
+    const scoringService = new ScoringService(scoringRepo, statsRepo);
     const scoringController = new ScoringController(scoringService);
+
+    const leaderboardsRepo = new LeaderboardsRepository();
+    const leaderboardsService = new LeaderboardsService(leaderboardsRepo);
+    const leaderboardsController = new LeaderboardsController(leaderboardsService);
 
     app.use((req, res, next) => {
         res.set('Cache-Control', 'no-store');
@@ -106,6 +117,8 @@ export const getApp = (): Application => {
     app.use('/friend', friendsRoutes(friendController));
 
     app.use('/scoring', scoringRoutes(scoringController));
+
+    app.use('/leaderboards', leaderboardsRoutes(leaderboardsController));
 
     app.use(globalErrorMiddleware);
 

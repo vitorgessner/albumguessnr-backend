@@ -57,6 +57,7 @@ class FriendsRepository {
                                 avatar_url: true,
                             },
                         },
+                        userStats: true,
                     },
                     omit: {
                         password: true,

@@ -1,20 +1,28 @@
 import ValidationError from '../../shared/errors/ValidationError.js';
+import type StatsRepository from '../stats/StatsRepository.js';
 import ScoringRepository from './ScoringRepository.js';
 import { config } from './utils/config.js';
-import { timeMult } from './utils/timeMult.js';
+
+interface GuessedTracklist {
+    trackId: string;
+    isCorrect: boolean;
+}
 
 interface GuessedCategories {
     album: boolean;
     artist?: boolean;
     genre?: boolean;
     year?: boolean;
-    tracklist?: number;
+    tracklist?: GuessedTracklist[];
 }
 
 type GameCategory = keyof ReturnType<typeof config>;
 
 class ScoringService {
-    constructor(private scoringRepo: ScoringRepository) {}
+    constructor(
+        private scoringRepo: ScoringRepository,
+        private statsRepo: StatsRepository
+    ) {}
 
     makeGuess = async (
         userId: string,
@@ -28,14 +36,45 @@ class ScoringService {
         const previousScore = await this.scoringRepo.findBestScore(userId, albumId);
         const isNewBestScore = (previousScore._max.totalScore ?? 0) < totalScore.totalScore;
 
+        const guessedTracks = guessedCategories.tracklist;
+        const rightGuessedTracks = guessedTracks?.filter((g) => g.isCorrect);
+
         await this.scoringRepo.makeGuess(
             userId,
             albumId,
             date,
             totalScore.totalScore,
             timeSpent,
-            totalScore.categories
+            totalScore.categories,
+            guessedTracks ?? []
         );
+
+        this.statsRepo.updateUserStats(userId, {
+            album: {
+                isGuessed: guessedCategories.album,
+                isCorrect: guessedCategories.album === true,
+                id: albumId,
+            },
+            artist: {
+                isGuessed: guessedCategories.artist,
+                isCorrect: guessedCategories.artist === true,
+            },
+            genre: {
+                isGuessed: guessedCategories.genre,
+                isCorrect: guessedCategories.genre === true,
+            },
+            year: {
+                isGuessed: guessedCategories.year,
+                isCorrect: guessedCategories.year === true,
+            },
+            tracks: {
+                totalTracks: guessedCategories.tracklist?.length ?? undefined,
+                guessedTracks:
+                    rightGuessedTracks?.length && rightGuessedTracks.length > 0
+                        ? rightGuessedTracks.length
+                        : undefined,
+            },
+        });
 
         return { score: Math.round(totalScore.totalScore / 100), isNewBestScore };
     };
@@ -65,7 +104,6 @@ class ScoringService {
         }
 
         const remainingTime = totalTime - timeSpent <= 0 ? 0 : totalTime - timeSpent;
-        // const timeMultiplier = timeMult((remainingTime * 100) / totalTime);
         const timeMultiplier = remainingTime / totalTime + 1;
 
         const formattedCategories = categories.map((c) => {
@@ -105,10 +143,11 @@ class ScoringService {
 
         if (guessedCategories[category] !== undefined) {
             if (category === 'tracklist' && guessedCategories['tracklist']) {
-                const rightAnswers = guessedCategories.tracklist;
+                const rightAnswers = guessedCategories.tracklist.filter((t) => t.isCorrect);
+
                 return {
                     category: category,
-                    score: (gameConfig.tracklist.basePoints / length) * rightAnswers,
+                    score: (gameConfig.tracklist.basePoints / length) * rightAnswers.length,
                 };
             }
 
