@@ -1,10 +1,13 @@
 import js from '@eslint/js';
 import ts from '@typescript-eslint/eslint-plugin';
+import globals from 'globals';
 import tsParser from '@typescript-eslint/parser';
 import prettier from 'eslint-plugin-prettier';
+import tseslint from 'typescript-eslint';
 
 export default [
     js.configs.recommended,
+    ...tseslint.configs.recommended,
     {
         files: ['**/*.ts'],
         ignores: ['**/*.config.ts'],
@@ -13,6 +16,7 @@ export default [
             globals: {
                 process: 'readonly',
                 console: 'readonly',
+                ...globals.browser,
             },
         },
         plugins: {

@@ -1,7 +1,8 @@
 import type { PrismaClient } from '@prisma/client/extension';
 import { prisma } from '../../config/prisma.js';
-import type { Prisma } from '../../generated/prisma/client.js';
+import { Prisma } from '../../generated/prisma/client.js';
 import { getStartOfDay } from './utils/dateUtils.js';
+import retryRequest from './utils/retryRequest.js';
 
 interface GuessAttemptCategoryWithCategoryAndScore {
     category: 'ALBUM' | 'ARTIST' | 'GENRE' | 'YEAR' | 'TRACKLIST';
@@ -67,18 +68,30 @@ class ScoringRepository {
                 await this.addNewBestScore(userId, albumId, date, categories, tx);
                 console.timeEnd('addNewBestScore');
             }
+        });
 
-            console.time('makeGuessAttempt');
-            await this.makeGuessAttempt(
-                userId,
-                albumId,
-                timeSpent,
-                totalScore,
-                categories,
-                guessedTracks,
-                tx
-            );
-            console.timeEnd('makeGuessAttempt');
+        this.makeGuessAttempt(
+            userId,
+            albumId,
+            timeSpent,
+            totalScore,
+            categories,
+            guessedTracks
+        ).catch((e) => {
+            if (e instanceof Prisma.PrismaClientKnownRequestError) {
+                retryRequest(
+                    () =>
+                        this.makeGuessAttempt(
+                            userId,
+                            albumId,
+                            timeSpent,
+                            totalScore,
+                            categories,
+                            guessedTracks
+                        ),
+                    3
+                );
+            }
         });
     };
 
