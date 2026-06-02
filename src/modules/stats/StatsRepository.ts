@@ -28,6 +28,19 @@ interface IConfig {
 class StatsRepository {
     constructor() {}
 
+    getUserStats = async (userId: string) => {
+        return await prisma.userStats.findUnique({
+            where: {
+                userId,
+            },
+            omit: {
+                totalScore: true,
+                id: true,
+                userId: true,
+            },
+        });
+    };
+
     updateUserStats = async (userId: string, config: IConfig) => {
         const data: Prisma.UserStatsUpdateInput = {};
         const album = await this.findGuessedAlbum(userId, config.album.id);

@@ -37,6 +37,9 @@ import LeaderboardsRepository from './modules/leaderboards/LeaderboardsRepositor
 import LeaderboardsService from './modules/leaderboards/LeaderboardsService.js';
 import leaderboardsRoutes from './modules/leaderboards/leaderboardsRoutes.js';
 import StatsRepository from './modules/stats/StatsRepository.js';
+import StatsService from './modules/stats/StatsService.js';
+import StatsController from './modules/stats/StatsController.js';
+import statsRoutes from './modules/stats/statsRoutes.js';
 
 export const getApp = (): Application => {
     const app = express();
@@ -81,6 +84,8 @@ export const getApp = (): Application => {
     const friendController = new FriendsController(friendService);
 
     const statsRepo = new StatsRepository();
+    const statsService = new StatsService(statsRepo, authRepo);
+    const statsController = new StatsController(statsService);
 
     const scoringRepo = new ScoringRepository();
     const scoringService = new ScoringService(scoringRepo, statsRepo);
@@ -119,6 +124,8 @@ export const getApp = (): Application => {
     app.use('/scoring', scoringRoutes(scoringController));
 
     app.use('/leaderboards', leaderboardsRoutes(leaderboardsController));
+
+    app.use('/stats', statsRoutes(statsController));
 
     app.use(globalErrorMiddleware);
 
