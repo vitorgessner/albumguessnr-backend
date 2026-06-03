@@ -1,4 +1,4 @@
-export const config = (n: number) => {
+export const basePointsAndExpectedTimePerCategory = (n: number) => {
     return {
         album: {
             basePoints: 10,

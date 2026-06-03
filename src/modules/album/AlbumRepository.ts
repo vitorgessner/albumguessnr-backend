@@ -15,6 +15,25 @@ type ArtistCreateInputWithoutMbid = Omit<ArtistCreateInput, 'mbid'> & {
 };
 
 class AlbumRepository {
+    get = async (albumId: string) => {
+        return await prisma.album.findUnique({
+            where: {
+                id: albumId,
+            },
+        });
+    };
+
+    getTracksLength = async (albumId: string) => {
+        return await prisma.track.aggregate({
+            where: {
+                albumId,
+            },
+            _count: {
+                id: true,
+            },
+        });
+    };
+
     create = async (
         data: AlbumCreateInputWithoutMbid,
         genres: Array<GenreCreateInput>,

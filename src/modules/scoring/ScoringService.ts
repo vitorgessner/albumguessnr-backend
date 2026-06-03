@@ -1,97 +1,68 @@
 import ValidationError from '../../shared/errors/ValidationError.js';
+import AlbumRepository from '../album/AlbumRepository.js';
+import { GuessedTrack } from '../game/guess/types/GuessedTrack.js';
 import type StatsRepository from '../stats/StatsRepository.js';
 import ScoringRepository from './ScoringRepository.js';
-import { config } from './utils/config.js';
-
-interface GuessedTracklist {
-    trackId: string;
-    isCorrect: boolean;
-}
+import { basePointsAndExpectedTimePerCategory } from './utils/basePoints.js';
 
 interface GuessedCategories {
     album: boolean;
     artist?: boolean;
     genre?: boolean;
     year?: boolean;
-    tracklist?: GuessedTracklist[];
+    tracklist?: GuessedTrack[];
 }
 
-type GameCategory = keyof ReturnType<typeof config>;
+type GameCategory = keyof ReturnType<typeof basePointsAndExpectedTimePerCategory>;
 
 class ScoringService {
     constructor(
         private scoringRepo: ScoringRepository,
-        private statsRepo: StatsRepository
+        private statsRepo: StatsRepository,
+        private albumRepo: AlbumRepository
     ) {}
 
-    makeGuess = async (
+    handleBestScore = async (
         userId: string,
         albumId: string,
         timeSpent: number,
         guessedCategories: GuessedCategories
     ) => {
-        const totalScore = await this.calculateTotalScore(albumId, timeSpent, guessedCategories);
+        const totalScoreWithCategories = await this.calculateTotalScore(
+            albumId,
+            timeSpent,
+            guessedCategories
+        );
         const date = new Date();
 
         const previousScore = await this.scoringRepo.findBestScore(userId, albumId);
-        const isNewBestScore = (previousScore._max.totalScore ?? 0) < totalScore.totalScore;
+        const isNewBestScore =
+            (previousScore._max.totalScore ?? 0) < totalScoreWithCategories.totalScore;
 
-        const guessedTracks = guessedCategories.tracklist;
-        const rightGuessedTracks = guessedTracks?.filter((g) => g.isCorrect);
-
-        await this.scoringRepo.makeGuess(
+        await this.scoringRepo.handleBestScore(
             userId,
             albumId,
             date,
-            totalScore.totalScore,
-            timeSpent,
-            totalScore.categories,
-            guessedTracks ?? []
+            totalScoreWithCategories.totalScore,
+            totalScoreWithCategories.categoriesWithScore
         );
 
-        this.statsRepo.updateUserStats(userId, {
-            album: {
-                isGuessed: guessedCategories.album,
-                isCorrect: guessedCategories.album === true,
-                id: albumId,
-            },
-            artist: {
-                isGuessed: guessedCategories.artist,
-                isCorrect: guessedCategories.artist === true,
-            },
-            genre: {
-                isGuessed: guessedCategories.genre,
-                isCorrect: guessedCategories.genre === true,
-            },
-            year: {
-                isGuessed: guessedCategories.year,
-                isCorrect: guessedCategories.year === true,
-            },
-            tracks: {
-                totalTracks: guessedCategories.tracklist?.length ?? undefined,
-                guessedTracks:
-                    rightGuessedTracks?.length && rightGuessedTracks.length > 0
-                        ? rightGuessedTracks.length
-                        : undefined,
-            },
-        });
-
-        return { score: Math.round(totalScore.totalScore / 100), isNewBestScore };
+        return { score: Math.round(totalScoreWithCategories.totalScore / 100), isNewBestScore };
     };
 
-    private calculateTotalScore = async (
+    calculateTotalScore = async (
         albumId: string,
         timeSpent: number,
         guessedCategories: GuessedCategories
     ) => {
         const length = await this.getTracksLength(albumId);
-        const gameConfig = config(length.id);
+        const pointsConfig = basePointsAndExpectedTimePerCategory(length.id);
 
         let totalTime = 0;
         const categories = [];
 
         for (const [key] of Object.entries(guessedCategories)) {
-            const points = await this.calculateCategoryScore(
+            const points = this.calculateCategoryScore(
                 length.id,
                 key as GameCategory,
                 guessedCategories
@@ -99,12 +70,13 @@ class ScoringService {
 
             if (points) {
                 categories.push(points);
-                totalTime += gameConfig[key as GameCategory].expectedTime;
+                totalTime += pointsConfig[key as GameCategory].expectedTime;
             }
         }
 
-        const remainingTime = totalTime - timeSpent <= 0 ? 0 : totalTime - timeSpent;
-        const timeMultiplier = remainingTime / totalTime + 1;
+        const remainingTime = totalTime - timeSpent;
+        const finalTime = remainingTime <= 0 ? 0 : remainingTime;
+        const timeMultiplier = finalTime / totalTime + 1;
 
         const formattedCategories = categories.map((c) => {
             return {
@@ -120,16 +92,16 @@ class ScoringService {
 
         return {
             totalScore: Math.round(formattedCategories.reduce((acc, cur) => acc + cur.score, 0)),
-            categories: formattedCategories,
+            categoriesWithScore: formattedCategories,
         };
     };
 
     getTracksLength = async (albumId: string) => {
-        const album = await this.scoringRepo.findAlbum(albumId);
+        const album = await this.albumRepo.get(albumId);
         if (!album) throw new ValidationError(404, 'No album found');
 
-        const tracksLength = await this.scoringRepo.getTracksLength(albumId);
-        if (!tracksLength) throw new ValidationError(500, 'Some error ocurred');
+        const tracksLength = await this.albumRepo.getTracksLength(albumId);
+        if (!tracksLength) throw new ValidationError(500, 'Some error occurred');
 
         return tracksLength._count;
     };
@@ -139,24 +111,23 @@ class ScoringService {
         category: GameCategory,
         guessedCategories: GuessedCategories
     ) => {
-        const gameConfig = config(length);
+        const pointsConfig = basePointsAndExpectedTimePerCategory(length);
 
-        if (guessedCategories[category] !== undefined) {
-            if (category === 'tracklist' && guessedCategories['tracklist']) {
-                const rightAnswers = guessedCategories.tracklist.filter((t) => t.isCorrect);
+        if (guessedCategories[category] === undefined) return null;
 
-                return {
-                    category: category,
-                    score: (gameConfig.tracklist.basePoints / length) * rightAnswers.length,
-                };
-            }
+        if (category === 'tracklist' && guessedCategories['tracklist']) {
+            const rightAnswers = guessedCategories.tracklist.filter((track) => track.isCorrect);
 
-            return guessedCategories[category]
-                ? { category, score: gameConfig[category].basePoints }
-                : { category, score: 0 };
+            return {
+                category: category,
+                score: (pointsConfig.tracklist.basePoints / length) * rightAnswers.length,
+            };
         }
 
-        return null;
+        if (guessedCategories[category])
+            return { category, score: pointsConfig[category].basePoints };
+
+        return { category, score: 0 };
     };
 }
 

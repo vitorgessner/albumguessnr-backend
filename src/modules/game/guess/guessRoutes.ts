@@ -6,7 +6,7 @@ const guessRoutes = (controller: GuessContoller) => {
 
     router.get('/:albumId', (req: Request, res: Response) => controller.getTimesGuessed(req, res));
 
-    router.put('/', (req: Request, res: Response) => controller.makeGuess(req, res));
+    router.post('/', (req: Request, res: Response) => controller.makeGuessAttempt(req, res));
 
     return router;
 };

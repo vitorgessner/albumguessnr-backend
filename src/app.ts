@@ -40,6 +40,8 @@ import StatsRepository from './modules/stats/StatsRepository.js';
 import StatsService from './modules/stats/StatsService.js';
 import StatsController from './modules/stats/StatsController.js';
 import statsRoutes from './modules/stats/statsRoutes.js';
+import GuessOrchestratorService from './modules/game/guess/GuessOrchestratorService.js';
+import TransactionRepository from './shared/TransactionRepo.js';
 
 export const getApp = (): Application => {
     const app = express();
@@ -61,6 +63,7 @@ export const getApp = (): Application => {
 
     app.use(express.static('public'));
 
+    const transactionRepo = new TransactionRepository();
     const albumRepo = new AlbumRepository();
 
     const integrationRepo = new IntegrationRepository();
@@ -75,10 +78,6 @@ export const getApp = (): Application => {
     const profileService = new ProfileService(profileRepo);
     const profileController = new ProfileController(profileService);
 
-    const guessRepo = new GuessRepository();
-    const guessService = new GuessService(guessRepo);
-    const guessController = new GuessController(guessService);
-
     const friendRepo = new FriendsRepository();
     const friendService = new FriendsService(friendRepo);
     const friendController = new FriendsController(friendService);
@@ -88,8 +87,21 @@ export const getApp = (): Application => {
     const statsController = new StatsController(statsService);
 
     const scoringRepo = new ScoringRepository();
-    const scoringService = new ScoringService(scoringRepo, statsRepo);
+    const scoringService = new ScoringService(scoringRepo, statsRepo, albumRepo);
     const scoringController = new ScoringController(scoringService);
+
+    const guessRepo = new GuessRepository();
+    const guessService = new GuessService(guessRepo, albumRepo);
+    const guessOrchestratorService = new GuessOrchestratorService(
+        guessRepo,
+        statsRepo,
+        transactionRepo
+    );
+    const guessController = new GuessController(
+        guessService,
+        scoringService,
+        guessOrchestratorService
+    );
 
     const leaderboardsRepo = new LeaderboardsRepository();
     const leaderboardsService = new LeaderboardsService(leaderboardsRepo);
