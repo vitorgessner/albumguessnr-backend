@@ -8,12 +8,13 @@ import AuthError from './errors/AuthError.js';
 import type { UserCreateInput } from '../../generated/prisma/models.js';
 import { env } from '../../shared/config/env.js';
 import type { IUserWithUsername } from './types/user.js';
+import ProfileRepository from '../profile/ProfileRepository.js';
 
 class AuthService {
-    private authRepo: AuthRepository;
-    constructor(authRepo: AuthRepository) {
-        this.authRepo = authRepo;
-    }
+    constructor(
+        private authRepo: AuthRepository,
+        private profileRepo: ProfileRepository
+    ) {}
 
     getAll = async () => {
         const users = await this.authRepo.findAll();
@@ -134,7 +135,9 @@ class AuthService {
     editPassword = async (username: string, password: string) => {
         if (!username) throw new ValidationError(404, 'Username should be provided');
 
-        const email = await this.authRepo.findByUsername(username).then((res) => res?.user.email);
+        const email = await this.profileRepo
+            .findByUserUsername(username)
+            .then((res) => res?.user.email);
         if (!email) throw new AuthError(404, 'Email not found');
 
         const hashedPassword = await bcrypt.hash(password, 10);

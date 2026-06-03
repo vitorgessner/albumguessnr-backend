@@ -1,13 +1,13 @@
 import ValidationError from '../../shared/errors/ValidationError';
-import AuthRepository from '../auth/AuthRepository';
 import AuthError from '../auth/errors/AuthError';
 import { GuessedCategories } from '../game/guess/types/GuessedCategories';
+import ProfileRepository from '../profile/ProfileRepository';
 import StatsRepository from './StatsRepository';
 
 class StatsService {
     constructor(
         private statsRepo: StatsRepository,
-        private authRepo: AuthRepository
+        private profileRepo: ProfileRepository
     ) {}
 
     getUserStats = async (username: string | string[] | undefined) => {
@@ -15,10 +15,10 @@ class StatsService {
         if (typeof username === 'object')
             throw new ValidationError(400, 'Username must be a string');
 
-        const user = await this.authRepo.findByUsername(username);
+        const user = await this.profileRepo.findByUserUsername(username);
         if (!user) throw new AuthError(404, 'User with the username provided not found');
 
-        const userStats = await this.statsRepo.getUserStats(user.userId);
+        const userStats = await this.statsRepo.getUserStats(user.user.id);
 
         return userStats ?? null;
     };

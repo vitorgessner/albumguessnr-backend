@@ -66,24 +66,24 @@ export const getApp = (): Application => {
     const transactionRepo = new TransactionRepository();
     const albumRepo = new AlbumRepository();
 
-    const integrationRepo = new IntegrationRepository();
-    const integrationService = new IntegrationService(integrationRepo, albumRepo);
-    const integrationController = new IntegrationController(integrationService);
-
-    const authRepo = new AuthRepository();
-    const authService = new AuthService(authRepo);
-    const authController = new AuthController(authService, integrationService);
-
     const profileRepo = new ProfileRepository();
     const profileService = new ProfileService(profileRepo);
     const profileController = new ProfileController(profileService);
 
+    const integrationRepo = new IntegrationRepository();
+    const integrationService = new IntegrationService(integrationRepo, albumRepo, profileRepo);
+    const integrationController = new IntegrationController(integrationService);
+
+    const authRepo = new AuthRepository();
+    const authService = new AuthService(authRepo, profileRepo);
+    const authController = new AuthController(authService, integrationService);
+
     const friendRepo = new FriendsRepository();
-    const friendService = new FriendsService(friendRepo);
+    const friendService = new FriendsService(friendRepo, profileRepo, albumRepo);
     const friendController = new FriendsController(friendService);
 
     const statsRepo = new StatsRepository();
-    const statsService = new StatsService(statsRepo, authRepo);
+    const statsService = new StatsService(statsRepo, profileRepo);
     const statsController = new StatsController(statsService);
 
     const scoringRepo = new ScoringRepository();

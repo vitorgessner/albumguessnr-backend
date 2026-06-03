@@ -19,7 +19,7 @@ class ProfileController {
         if (!profile)
             return res
                 .status(200)
-                .json({ status: 'success', message: 'User data fetched', user: null });
+                .json({ status: 'success', message: 'Profile data fetched', profile: null });
 
         return res.status(200).json({ status: 'success', message: 'User data fetched', profile });
     };

@@ -2,16 +2,17 @@ import type { Request, Response } from 'express';
 import type FriendsService from './FriendsService.js';
 import AuthError from '../auth/errors/AuthError.js';
 import ValidationError from '../../shared/errors/ValidationError.js';
+import { FriendsStats } from '../../generated/prisma/enums.js';
 
 class FriendsController {
     constructor(private friendsService: FriendsService) {}
 
     getFriends = async (req: Request, res: Response) => {
         const username = req.params.username;
+        if (!username || typeof username !== 'string')
+            throw new ValidationError(400, 'Invalid value for username');
 
-        if (!username) throw new ValidationError(400, 'No user provided');
-
-        const friends = await this.friendsService.getFriends(username as string);
+        const friends = await this.friendsService.getFriends(username);
 
         return res.status(200).json({ status: 'success', message: 'Friends fetched', friends });
     };
@@ -21,9 +22,10 @@ class FriendsController {
         const albumId = req.params.albumId;
 
         if (!id) throw new ValidationError(401, 'Not logged in');
-        if (!albumId) throw new ValidationError(400, 'No album id provided');
+        if (!albumId || typeof albumId !== 'string')
+            throw new ValidationError(400, 'Invalid value for album id');
 
-        const friends = await this.friendsService.getFriendsWithAlbum(id, albumId as string);
+        const friends = await this.friendsService.getFriendsWithAlbum(id, albumId);
 
         return res.status(200).json({
             status: 'success',
@@ -36,10 +38,11 @@ class FriendsController {
         const userId = req.userId;
         const username = req.params.username;
 
-        if (!username) throw new ValidationError(400, 'No user provided');
+        if (!username || typeof username !== 'string')
+            throw new ValidationError(400, 'Invalid value for username');
         if (!userId) throw new AuthError(404, 'Not logged in');
 
-        const friendStatus = await this.friendsService.getStatus(username as string, userId);
+        const friendStatus = await this.friendsService.getStatus(username, userId);
 
         return res
             .status(200)
@@ -54,12 +57,17 @@ class FriendsController {
         if (!receivedRequestsId)
             throw new ValidationError(400, 'You have to include a user to make a request');
 
-        const request = await this.friendsService.makeRequest(userId, receivedRequestsId as string);
+        if (typeof receivedRequestsId !== 'string')
+            throw new ValidationError(400, 'receivedRequestsId must be a string');
 
-        if (!('length' in request))
-            return res.status(200).json({ status: 'success', message: 'Request made', request });
+        const request = await this.friendsService.makeRequest(userId, receivedRequestsId);
 
-        return res.status(200).json({ status: 'success', message: 'You are now friends', request });
+        if (this.wasAlreadyRequestedByUser(request))
+            return res
+                .status(200)
+                .json({ status: 'success', message: 'You are now friends', request });
+
+        return res.status(200).json({ status: 'success', message: 'Request made', request });
     };
 
     cancelRequest = async (req: Request, res: Response) => {
@@ -70,10 +78,10 @@ class FriendsController {
         if (!receivedRequestsId)
             throw new ValidationError(400, 'You have to include a user to cancel a request');
 
-        const request = await this.friendsService.cancelRequest(
-            userId,
-            receivedRequestsId as string
-        );
+        if (typeof receivedRequestsId !== 'string')
+            throw new ValidationError(400, 'receivedRequestsId must be a string');
+
+        const request = await this.friendsService.cancelRequest(userId, receivedRequestsId);
 
         return res.status(200).json({ status: 'success', message: 'Request cancelled', request });
     };
@@ -89,7 +97,10 @@ class FriendsController {
                 'A user has to make a request to you for you to accept it'
             );
 
-        await this.friendsService.acceptRequest(userId, sentRequestsId as string);
+        if (typeof sentRequestsId !== 'string')
+            throw new ValidationError(400, 'sentRequestsId must be a string');
+
+        await this.friendsService.acceptRequest(userId, sentRequestsId);
         res.status(200).json({ status: 'success', message: 'You are now friends' });
     };
 
@@ -104,7 +115,10 @@ class FriendsController {
                 'A user has to make a request to you for you to deny it'
             );
 
-        await this.friendsService.denyRequest(userId, sentRequestsId as string);
+        if (typeof sentRequestsId !== 'string')
+            throw new ValidationError(400, 'sentRequestsId must be a string');
+
+        await this.friendsService.denyRequest(userId, sentRequestsId);
         res.status(200).json({ status: 'success', message: 'You denied the request' });
     };
 
@@ -117,6 +131,40 @@ class FriendsController {
 
         await this.friendsService.unfriend(userId, friendId as string);
         res.status(200).json({ status: 'success', message: 'You two are now unfriended' });
+    };
+
+    private wasAlreadyRequestedByUser = (
+        request:
+            | {
+                  sentRequestsId: string;
+                  receivedRequestsId: string;
+                  stat: FriendsStats;
+                  timesRequested: number;
+                  timesRejected: number;
+                  lastRequestedAt: Date;
+              }
+            | [
+                  {
+                      sentRequestsId: string;
+                      receivedRequestsId: string;
+                      stat: FriendsStats;
+                      timesRequested: number;
+                      timesRejected: number;
+                      lastRequestedAt: Date;
+                  },
+                  {
+                      sentRequestsId: string;
+                      receivedRequestsId: string;
+                      stat: FriendsStats;
+                      timesRequested: number;
+                      timesRejected: number;
+                      lastRequestedAt: Date;
+                  },
+              ]
+    ) => {
+        if (!('length' in request)) return false;
+
+        return true;
     };
 }
 

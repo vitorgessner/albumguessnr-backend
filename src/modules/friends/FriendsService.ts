@@ -1,12 +1,18 @@
 import ValidationError from '../../shared/errors/ValidationError.js';
+import AlbumRepository from '../album/AlbumRepository.js';
+import ProfileRepository from '../profile/ProfileRepository.js';
 import FriendError from './errors/FriendError.js';
 import type FriendsRepository from './FriendsRepository.js';
 
 class FriendsService {
-    constructor(private friendsRepo: FriendsRepository) {}
+    constructor(
+        private friendsRepo: FriendsRepository,
+        private profileRepo: ProfileRepository,
+        private albumRepo: AlbumRepository
+    ) {}
 
     getFriends = async (username: string) => {
-        const user = await this.friendsRepo.findByUsername(username);
+        const user = await this.profileRepo.findByUserUsername(username);
         if (!user) throw new FriendError(404, 'User not found');
 
         const friends = await this.friendsRepo.findFriends(user.user.id);
@@ -26,10 +32,10 @@ class FriendsService {
     };
 
     getFriendsWithAlbum = async (id: string, albumId: string) => {
-        const user = await this.friendsRepo.findUser(id);
+        const user = await this.profileRepo.findByUserId(id);
         if (!user) throw new FriendError(404, 'User not found');
 
-        const album = await this.friendsRepo.findAlbum(albumId);
+        const album = await this.albumRepo.get(albumId);
         if (!album) throw new ValidationError(404, 'Album not found');
 
         const friends = await this.friendsRepo.findFriendsWithAlbum(id, albumId);
@@ -41,13 +47,14 @@ class FriendsService {
     };
 
     getStatus = async (username: string, userId: string) => {
-        const user = await this.friendsRepo.findByUsername(username);
-        if (!user) throw new FriendError(404, 'User not found');
+        const profile = await this.profileRepo.findByUserUsername(username);
+        if (!profile) throw new FriendError(404, 'User not found');
 
-        if (user.userId === userId) return null;
+        if (profile.user.id === userId) return null;
 
-        let friendStatus = await this.friendsRepo.findFriend(user.user.id, userId);
-        if (!friendStatus) friendStatus = await this.friendsRepo.findFriend(userId, user.user.id);
+        let friendStatus = await this.friendsRepo.findFriend(profile.user.id, userId);
+        if (!friendStatus)
+            friendStatus = await this.friendsRepo.findFriend(userId, profile.user.id);
 
         return friendStatus;
     };
@@ -56,12 +63,11 @@ class FriendsService {
         if (sentRequestsId === receivedRequestsId)
             throw new ValidationError(400, 'You cannot make a request to yourself');
 
-        const receivedRequestsUser = await this.friendsRepo.findUser(receivedRequestsId);
+        const receivedRequestsUser = await this.profileRepo.findByUserId(receivedRequestsId);
         if (!receivedRequestsUser) throw new ValidationError(404, 'Requested user not found');
 
         const request = await this.friendsRepo.findRequest(sentRequestsId, receivedRequestsId);
         const requested = await this.friendsRepo.findRequest(receivedRequestsId, sentRequestsId);
-        console.log(request, requested);
 
         if (!request) {
             if (!requested)
@@ -102,7 +108,7 @@ class FriendsService {
     };
 
     cancelRequest = async (userId: string, receivedRequestsId: string) => {
-        const receivedRequestsUser = await this.friendsRepo.findUser(receivedRequestsId);
+        const receivedRequestsUser = await this.profileRepo.findByUserId(receivedRequestsId);
         if (!receivedRequestsUser) throw new ValidationError(404, 'Requested user not found');
 
         const request = await this.friendsRepo.findRequest(userId, receivedRequestsId);
@@ -112,7 +118,7 @@ class FriendsService {
     };
 
     acceptRequest = async (userId: string, sentRequestsId: string) => {
-        const sentRequestsUser = await this.friendsRepo.findUser(sentRequestsId);
+        const sentRequestsUser = await this.profileRepo.findByUserId(sentRequestsId);
         if (!sentRequestsUser) throw new ValidationError(404, 'User not found');
 
         const request = await this.friendsRepo.findRequest(sentRequestsId, userId);
@@ -135,7 +141,7 @@ class FriendsService {
     };
 
     denyRequest = async (userId: string, sentRequestsId: string) => {
-        const sentRequestsUser = await this.friendsRepo.findUser(sentRequestsId);
+        const sentRequestsUser = await this.profileRepo.findByUserId(sentRequestsId);
         if (!sentRequestsUser) throw new ValidationError(404, 'User not found');
 
         const request = await this.friendsRepo.findRequest(sentRequestsId, userId);
@@ -153,7 +159,7 @@ class FriendsService {
     };
 
     unfriend = async (userId: string, friendId: string) => {
-        const friendUser = await this.friendsRepo.findUser(friendId);
+        const friendUser = await this.profileRepo.findByUserId(friendId);
         if (!friendUser) throw new ValidationError(404, 'User not found');
 
         const request = await this.friendsRepo.findRequest(userId, friendId);

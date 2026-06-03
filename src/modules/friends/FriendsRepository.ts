@@ -2,36 +2,6 @@ import { prisma } from '../../config/prisma.js';
 import { Prisma } from '../../generated/prisma/client.js';
 
 class FriendsRepository {
-    findUser = async (id: string) => {
-        return await prisma.user.findUnique({
-            where: {
-                id,
-            },
-            select: {
-                id: true,
-            },
-        });
-    };
-
-    findAlbum = async (id: string) => {
-        return await prisma.album.findUnique({
-            where: {
-                id,
-            },
-        });
-    };
-
-    findByUsername = async (username: string) => {
-        return await prisma.profile.findUnique({
-            where: {
-                username,
-            },
-            include: {
-                user: true,
-            },
-        });
-    };
-
     findRequest = async (sentRequestsId: string, receivedRequestsId: string) => {
         return await prisma.userFriends.findUnique({
             where: {
@@ -99,8 +69,6 @@ class FriendsRepository {
                 ) AS "TotalPoints"
             GROUP BY "userId"
         `;
-
-        // console.log(pointsPerDay);
 
         const friends = await prisma.user.findMany({
             where: {

@@ -10,7 +10,7 @@ const syncMiddleware = (integrationService: IntegrationService, map: Map<string,
 
         const lastfmUsername = await integrationService
             .getLastfmUserByUserId(userId)
-            .then((response) => response?.lastfmIntegration?.lastfmUsername);
+            .then((response) => response?.user.lastfmIntegration?.lastfmUsername);
         if (!lastfmUsername) throw new IntegrationError(404, 'Lastfm username not found');
 
         const stats = await integrationService.getLastSyncedStats(lastfmUsername);

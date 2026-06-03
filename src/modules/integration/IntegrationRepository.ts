@@ -1,33 +1,12 @@
 import { prisma } from '../../config/prisma.js';
-
-interface IUserAlbumFamiliarity {
-    id: string;
-    playcount: number;
-    lastTimeListened: Date | null;
-    tracksListened: number | null;
-}
-
-interface IUpdateSync {
-    lastPageSynced: number;
-    lastSyncedAt: Date;
-}
+import { IUpdateSync } from './types/IUpdateSync.js';
+import { IUserAlbumFamiliarity } from './types/IUserAlbumFamiliarity.js';
 
 class IntegrationRepository {
     findLastfmUserByUsername = async (lastfmUsername: string) => {
         return await prisma.lastFmIntegration.findUnique({
             where: {
                 lastfmUsername,
-            },
-        });
-    };
-
-    findLastfmUserByUserId = async (id: string) => {
-        return await prisma.user.findUnique({
-            where: {
-                id,
-            },
-            select: {
-                lastfmIntegration: true,
             },
         });
     };

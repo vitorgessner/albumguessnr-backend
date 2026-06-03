@@ -40,17 +40,6 @@ class AuthRepository {
         });
     };
 
-    findByUsername = async (username: string) => {
-        return await prisma.profile.findUnique({
-            where: {
-                username,
-            },
-            include: {
-                user: true,
-            },
-        });
-    };
-
     findByToken = async (userVerificationToken: string) => {
         return await prisma.verificationToken.findUnique({
             where: {

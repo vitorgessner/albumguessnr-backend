@@ -6,6 +6,22 @@ class ProfileRepository {
             where: {
                 userId: id,
             },
+            include: {
+                user: {
+                    select: {
+                        lastfmIntegration: true,
+                        email: true,
+                        userStats: true,
+                        createdAt: true,
+                        id: true,
+                    },
+                },
+            },
+            omit: {
+                updatedAt: true,
+                userId: true,
+                id: true,
+            },
         });
     };
 
@@ -17,11 +33,8 @@ class ProfileRepository {
             include: {
                 user: {
                     select: {
-                        lastfmIntegration: {
-                            select: {
-                                lastfmUsername: true,
-                            },
-                        },
+                        lastfmIntegration: true,
+                        email: true,
                         userStats: true,
                         createdAt: true,
                         id: true,
