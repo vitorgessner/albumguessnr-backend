@@ -10,6 +10,7 @@ const Env = z.object({
     PASSWORD: z.string().min(19),
     API_KEY: z.string().min(32),
     NODE_ENV: z.string().min(3),
+    LOG_LEVEL: z.string().min(4),
 });
 
 const Dev = Env.extend({

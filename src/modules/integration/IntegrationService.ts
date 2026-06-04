@@ -15,6 +15,7 @@ import type { IAlbumInfo, IMBAlbum, IMBAlbumResponse } from './types/IAlbumInfo.
 import { AxiosError } from 'axios';
 import type { INormalizedArtist, INormalizedTrack } from './types/normalizedTypes.js';
 import ProfileRepository from '../profile/ProfileRepository.js';
+import { logger } from '../../config/logger.js';
 
 class IntegrationService {
     constructor(
@@ -40,7 +41,11 @@ class IntegrationService {
         return { status: 'success', message: 'User connected' };
     };
 
-    fetchUserAlbums = async (lastfmUsername: string | undefined, cb: () => void) => {
+    fetchUserAlbums = async (
+        userId: string,
+        lastfmUsername: string | undefined,
+        cb: () => void
+    ) => {
         try {
             if (!lastfmUsername) throw new ValidationError(400, 'LastFm username not specified');
 
@@ -52,6 +57,13 @@ class IntegrationService {
             const normalizedAlbums: Array<IUserAlbumWithInfo> = await this.normalizeAlbums(albums);
 
             for (const album of normalizedAlbums) {
+                const childLogger = logger.child({
+                    requestId: userId,
+                    album: album.name,
+                    mbid: album.mbid,
+                    artist: album.artist.name,
+                    normalized: album.normalizedName + ', ' + album.normalizedArtist,
+                });
                 try {
                     const info = album.mbid
                         ? await this.fetchAlbumInforByMbid(album.mbid.trim())
@@ -60,8 +72,11 @@ class IntegrationService {
                               album.normalizedArtist
                           );
 
-                    if (!info || !info.tracks || !info.tracks.track)
-                        throw new IntegrationError(404, 'No tracks found');
+                    if (!info || !info.tracks || !info.tracks.track) {
+                        childLogger.error(
+                            new IntegrationError(404, 'Failed to fetch albums tracks')
+                        );
+                    }
 
                     const musicBrainzAlbum = await this.fetchMusicBrainzAlbum(
                         album.normalizedName,
@@ -69,14 +84,24 @@ class IntegrationService {
                     );
 
                     if (!musicBrainzAlbum)
-                        throw new IntegrationError(404, 'No MusicBrainz album found');
+                        childLogger.error(
+                            new IntegrationError(
+                                404,
+                                'Album not found on MusicBrainz (impact year and tags)'
+                            )
+                        );
 
-                    const year = musicBrainzAlbum['first-release-date'].split('-')[0];
+                    const year = musicBrainzAlbum?.['first-release-date'].split('-')[0];
 
-                    const tags = musicBrainzAlbum.tags;
+                    const tags = musicBrainzAlbum?.tags ?? info.tags.tag;
 
-                    const normalizedArtists: Array<INormalizedArtist> =
-                        await this.normalizeArtists(musicBrainzAlbum);
+                    const normalizedArtists = (await this.normalizeArtists(musicBrainzAlbum)) ?? [
+                        {
+                            mbid: album.artist.mbid,
+                            name: album.artist.name,
+                            normalizedName: album.normalizedArtist,
+                        },
+                    ];
 
                     const normalizedTracks: Array<INormalizedTrack> =
                         await this.normalizeTracks(info);
@@ -145,7 +170,9 @@ class IntegrationService {
         return albums;
     };
 
-    private normalizeArtists = async (album: IMBAlbum) => {
+    private normalizeArtists = async (album: IMBAlbum | undefined) => {
+        if (!album) return null;
+
         const normalizedArtists = album['artist-credit'].map((artist) => {
             return {
                 mbid: artist.artist.id,
@@ -306,10 +333,12 @@ class IntegrationService {
     private createNewAlbum = async (
         album: IUserAlbumWithInfo,
         year: string | undefined,
-        tags: Array<{ name: string }>,
-        normalizedArtists: Array<INormalizedArtist>,
+        tags: Array<{ name: string }> | undefined,
+        normalizedArtists: Array<INormalizedArtist> | null,
         normalizedTracks: Array<INormalizedTrack>
     ) => {
+        const formattedTags = tags ?? [];
+        const formattedArtists = normalizedArtists ?? [];
         const newAlbum = await this.albumRepo.create(
             {
                 mbid: album.mbid === '' ? null : album.mbid,
@@ -319,8 +348,8 @@ class IntegrationService {
                 year: year ?? null,
                 cover_url: album.cover_url,
             },
-            [...tags],
-            [...normalizedArtists],
+            [...formattedTags],
+            [...formattedArtists],
             [...normalizedTracks]
         );
 

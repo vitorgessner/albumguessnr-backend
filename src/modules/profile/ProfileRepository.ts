@@ -17,11 +17,6 @@ class ProfileRepository {
                     },
                 },
             },
-            omit: {
-                updatedAt: true,
-                userId: true,
-                id: true,
-            },
         });
     };
 

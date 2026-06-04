@@ -7,6 +7,7 @@ import AuthRepository from './modules/auth/AuthRepository.js';
 import globalErrorMiddleware from './shared/middlewares/globalErrorMiddleware.js';
 import authMiddleware from './modules/auth/middlewares/authMiddleware.js';
 import cookieParser from 'cookie-parser';
+import morgan from 'morgan';
 import profileRoutes from './modules/profile/profileRoutes.js';
 import ProfileRepository from './modules/profile/ProfileRepository.js';
 import ProfileService from './modules/profile/ProfileService.js';
@@ -63,6 +64,8 @@ export const getApp = (): Application => {
 
     app.use(express.static('public'));
 
+    app.use(morgan('dev'));
+
     const transactionRepo = new TransactionRepository();
     const albumRepo = new AlbumRepository();
 
@@ -117,9 +120,9 @@ export const getApp = (): Application => {
     app.use(
         authMiddleware.unless({
             path: [
-                '/profile',
+                // '/profile',
                 '/friend',
-                { url: /^\/profile\/[\w-]+$/ },
+                // { url: /^\/profile\/[\w-]+$/ },
                 { url: /^\/friend\/[\w-]+$/, method: 'GET' },
             ],
         })

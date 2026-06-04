@@ -21,7 +21,9 @@ const syncMiddleware = (integrationService: IntegrationService, map: Map<string,
             Date.now() - lastSyncedAt >= 1000 * 60 * 60 * 24
         ) {
             map.set(userId, true);
-            integrationService.fetchUserAlbums(lastfmUsername, () => map.set(userId, false));
+            integrationService.fetchUserAlbums(userId, lastfmUsername, () =>
+                map.set(userId, false)
+            );
         }
 
         next();
