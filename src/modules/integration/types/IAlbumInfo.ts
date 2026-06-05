@@ -17,21 +17,35 @@ export interface IAlbumInfo {
         },
     ];
     tracks: {
-        track: [
-            {
-                duration: string;
-                url: string;
-                name: string;
-                '@attr': {
-                    rank: number;
-                };
-                artist: {
-                    url: string;
-                    name: string;
-                    mbid: string;
-                };
-            },
-        ];
+        track:
+            | [
+                  {
+                      duration: string;
+                      url: string;
+                      name: string;
+                      '@attr': {
+                          rank: number;
+                      };
+                      artist: {
+                          url: string;
+                          name: string;
+                          mbid: string;
+                      };
+                  },
+              ]
+            | {
+                  duration: string;
+                  url: string;
+                  name: string;
+                  '@attr': {
+                      rank: number;
+                  };
+                  artist: {
+                      url: string;
+                      name: string;
+                      mbid: string;
+                  };
+              };
     };
     url: string;
     playcount: string;

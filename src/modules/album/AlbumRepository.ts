@@ -97,6 +97,15 @@ class AlbumRepository {
                 normalizedArtist: data.normalizedArtist,
                 year: data.year ?? null,
                 cover_url: data.cover_url,
+                tracks: {
+                    createMany: {
+                        data: tracks.map((t) => ({
+                            name: t.name,
+                            normalizedName: t.normalizedName,
+                        })),
+                        skipDuplicates: true,
+                    },
+                },
             },
         });
     };

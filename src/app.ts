@@ -43,6 +43,7 @@ import StatsController from './modules/stats/StatsController.js';
 import statsRoutes from './modules/stats/statsRoutes.js';
 import GuessOrchestratorService from './modules/game/guess/GuessOrchestratorService.js';
 import TransactionRepository from './shared/TransactionRepo.js';
+import { logger } from './config/logger.js';
 
 export const getApp = (): Application => {
     const app = express();
@@ -74,7 +75,12 @@ export const getApp = (): Application => {
     const profileController = new ProfileController(profileService);
 
     const integrationRepo = new IntegrationRepository();
-    const integrationService = new IntegrationService(integrationRepo, albumRepo, profileRepo);
+    const integrationService = new IntegrationService(
+        integrationRepo,
+        albumRepo,
+        profileRepo,
+        logger
+    );
     const integrationController = new IntegrationController(integrationService);
 
     const authRepo = new AuthRepository();
