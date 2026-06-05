@@ -69,27 +69,15 @@ class IntegrationService {
 
             const normalizedTracks = await this.normalizeTracks(albumInfo);
 
-            try {
-                const newAlbum = await this.createNewAlbum(
-                    album,
-                    year,
-                    tags,
-                    normalizedArtists,
-                    normalizedTracks
-                );
-
-                await this.integrationRepo.syncAlbum(lastfmUser.id, {
-                    id: newAlbum.id,
-                    playcount: Number(album.playcount),
-                    lastTimeListened: null,
-                    tracksListened: null,
-                });
-            } catch (err) {
-                childLogger.log(
-                    'fatal',
-                    new IntegrationError(500, 'Failed to save and sync album', { cause: err })
-                );
-            }
+            await this.createAndSyncNewAlbum(
+                lastfmUser.id,
+                album,
+                year,
+                tags,
+                normalizedArtists,
+                normalizedTracks,
+                childLogger
+            );
         }
 
         await this.integrationRepo.updateLastSynced(lastfmUser.lastfmUsername.trim(), {
@@ -173,7 +161,7 @@ class IntegrationService {
             return info;
         } catch (err) {
             logger.error(
-                new IntegrationError(404, 'Failed to fetch albums tracks', {
+                new IntegrationError(500, 'Failed to fetch albums tracks', {
                     cause: sanitizeError(err),
                 })
             );
@@ -201,8 +189,43 @@ class IntegrationService {
 
             return musicBrainzAlbum;
         } catch (err) {
+            logger.log(
+                'fatal',
+                new IntegrationError(500, 'Failed to fetch album on MusicBrainz', {
+                    cause: sanitizeError(err),
+                })
+            );
+            return undefined;
+        }
+    };
+
+    private createAndSyncNewAlbum = async (
+        lastfmUserId: string,
+        album: IUserAlbumWithInfo,
+        year: string | undefined,
+        tags: Array<{ name: string }> | undefined,
+        normalizedArtists: Array<INormalizedArtist> | null,
+        normalizedTracks: Array<INormalizedTrack> | INormalizedTrack,
+        logger: winston.Logger
+    ) => {
+        try {
+            const newAlbum = await this.createNewAlbum(
+                album,
+                year,
+                tags,
+                normalizedArtists,
+                normalizedTracks
+            );
+
+            await this.integrationRepo.syncAlbum(lastfmUserId, {
+                id: newAlbum.id,
+                playcount: Number(album.playcount),
+                lastTimeListened: null,
+                tracksListened: null,
+            });
+        } catch (err) {
             logger.error(
-                new IntegrationError(404, 'Failed to fetch album on MusicBrainz', {
+                new IntegrationError(500, 'Failed to create and sync album', {
                     cause: sanitizeError(err),
                 })
             );
