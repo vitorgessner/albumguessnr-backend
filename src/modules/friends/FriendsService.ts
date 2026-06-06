@@ -99,7 +99,6 @@ class FriendsService {
 
         const timePassed =
             new Date().getTime() / 1000 / 60 - request.lastRequestedAt.getTime() / 1000 / 60;
-        console.log(timePassed);
 
         if (timePassed < 0.1)
             throw new FriendError(403, 'You should wait before making more request to this user');

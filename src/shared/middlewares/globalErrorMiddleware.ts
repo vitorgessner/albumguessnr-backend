@@ -69,6 +69,7 @@ const globalErrorMiddleware = (err: Error, req: Request, res: Response, _: NextF
 
     logger.error(err instanceof Error ? err.message : String(err), {
         ...sanitizedError,
+        requestId: req.userId,
         method: req.method,
         path: req.path,
         meta: err instanceof PrismaClientKnownRequestError ? err.meta : undefined,

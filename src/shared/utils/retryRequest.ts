@@ -1,3 +1,6 @@
+import { logger } from '../../config/logger';
+import { sanitizeError } from './sanitizeCause';
+
 const retryRequest = async (cb: () => void, retryTimes: number) => {
     for (let i = 0; i < retryTimes; i++) {
         try {
@@ -8,8 +11,10 @@ const retryRequest = async (cb: () => void, retryTimes: number) => {
             });
 
             return;
-        } catch (e) {
-            console.log(e);
+        } catch (err) {
+            logger.error(err instanceof Error ? err.message : String(err), {
+                cause: sanitizeError(err),
+            });
         }
     }
 

@@ -88,11 +88,8 @@ class AuthController {
         const { username, token, refresh, id } = await this.authService.verifyEmail(
             userVerificationToken as string
         );
-        try {
-            await this.integrationService.connectLastfmUser(undefined, id);
-        } catch (err) {
-            console.log(err);
-        }
+
+        await this.integrationService.connectLastfmUser(undefined, id);
 
         return res
             .cookie('token', token, COOKIE_OPTIONS(1000 * 60 * 65))

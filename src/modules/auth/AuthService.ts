@@ -9,11 +9,15 @@ import type { UserCreateInput } from '../../generated/prisma/models.js';
 import { env } from '../../shared/config/env.js';
 import type { IUserWithUsername } from './types/user.js';
 import ProfileRepository from '../profile/ProfileRepository.js';
+import winston from 'winston';
+import { sanitizeError } from '../../shared/utils/sanitizeCause.js';
+import { buildEmailTemplate } from './utils/buildEmail.js';
 
 class AuthService {
     constructor(
         private authRepo: AuthRepository,
-        private profileRepo: ProfileRepository
+        private profileRepo: ProfileRepository,
+        private logger: winston.Logger
     ) {}
 
     getAll = async () => {
@@ -60,17 +64,27 @@ class AuthService {
         if (!password) throw new ValidationError(400, 'Password is required');
 
         const emailExists = await this.authRepo.findByEmail(email);
+        const childLogger = this.instantiateChildLogger({
+            userId: emailExists?.id,
+            email: emailExists?.email,
+            username: emailExists?.profile?.username,
+        });
+
         if (emailExists) {
-            try {
-                await this.sendMail(
-                    email,
+            this.sendMail(
+                email,
+                'Account creation attempt',
+                '',
+                buildEmailTemplate(
                     'Account creation attempt',
                     // eslint-disable-next-line max-len
                     'Someone tried to create an account with your email. If it was you, try logging in'
-                );
-            } catch (err) {
-                console.log(err);
-            }
+                )
+            ).catch((err) =>
+                childLogger.error(
+                    new AuthError(500, 'Failed to send email', { cause: sanitizeError(err) })
+                )
+            );
             return { status: 'success' };
         }
 
@@ -90,19 +104,30 @@ class AuthService {
         const emailExists = await this.authRepo.findByEmail(email);
         if (!emailExists) return;
 
-        try {
-            if (!emailExists.emailVerified) {
-                return await this.sendTokenToEmail(email);
-            }
-
-            return await this.sendMail(
-                email,
-                'Email already verified',
-                'Your email is already verified, please try logging in'
-            );
-        } catch (err) {
-            console.log(err);
+        if (!emailExists.emailVerified) {
+            return await this.sendTokenToEmail(email);
         }
+
+        const childLogger = this.instantiateChildLogger({
+            userId: emailExists?.id,
+            email: emailExists?.email,
+            username: emailExists?.profile?.username,
+        });
+
+        this.sendMail(
+            email,
+            'Email already verified',
+            '',
+            buildEmailTemplate(
+                'Email already verified',
+                'Your email was already verified by our system, please try logging in instead'
+            )
+        ).catch((err) =>
+            childLogger.error(
+                new AuthError(500, 'Failed to send email', { cause: sanitizeError(err) })
+            )
+        );
+
         return { status: 'success' };
     };
 
@@ -112,23 +137,30 @@ class AuthService {
         const emailExists = await this.authRepo.findByEmail(email);
         if (!emailExists) return;
 
-        const username = await this.authRepo.findByEmail(email);
+        const username = emailExists.profile?.username;
 
-        try {
-            await this.sendMail(
-                email,
-                'Forgot your password',
-                '',
-                `<div>Please click on the link below to change your password. 
-                If it was not you, be worried</div>
-                <a href=
-                "${env.FRONTEND_URL}/auth/${username?.profile?.username}/passwordChange">
-                Change your password
-                </a>`
-            );
-        } catch (err) {
-            console.log(err);
-        }
+        const childLogger = this.instantiateChildLogger({
+            userId: emailExists?.id,
+            email: emailExists?.email,
+            username,
+        });
+
+        this.sendMail(
+            email,
+            'Forgot your password',
+            '',
+            buildEmailTemplate(
+                'Reset password',
+                'Please click on the button below to change your password',
+                'If it was not you, please, ignore this email',
+                `/auth/${username}/passwordChange`
+            )
+        ).catch((err) =>
+            childLogger.error(
+                new AuthError(500, 'Failed to send email', { cause: sanitizeError(err) })
+            )
+        );
+
         return { status: 'success' };
     };
 
@@ -202,6 +234,24 @@ class AuthService {
         return await this.authRepo.deleteRefreshToken(refreshToken.token);
     };
 
+    private instantiateChildLogger = ({
+        userId,
+        email,
+        username,
+    }: {
+        userId?: string | undefined;
+        email?: string | undefined;
+        username?: string | undefined;
+    }) => {
+        const childLogger = this.logger.child({
+            requestId: userId,
+            email,
+            username,
+        });
+
+        return childLogger;
+    };
+
     private validateEmail = async (email: string) => {
         const user = await this.authRepo.findByEmail(email);
 
@@ -252,7 +302,6 @@ class AuthService {
             password: hashedPassword,
             emailVerified: false,
             createdAt: new Date(),
-            // lastfmIntegrationId: null,
         };
         return newUser;
     };
@@ -262,12 +311,23 @@ class AuthService {
         const token = this.generateToken();
         const userVerificationToken = await this.authRepo.createVerificationToken(token, email);
         const verificationToken = userVerificationToken.token;
-        await this.sendMail(
+
+        const childLogger = this.instantiateChildLogger({ email });
+        this.sendMail(
             email,
             'Verify your account',
             'Please click on the link below to verify your account',
-
-            `<a href="${env.FRONTEND_URL}/verify/${verificationToken}">Verify your email</a>`
+            buildEmailTemplate(
+                'Verify your account',
+                // eslint-disable-next-line max-len
+                'Welcome to the most fun community for album guessing. Prepare to compete with your friends and see who does better.',
+                'Please click on the button below to verify your account and start guessing!',
+                `/verify/${verificationToken}`
+            )
+        ).catch((err) =>
+            childLogger.error(
+                new AuthError(500, 'Failed to send email', { cause: sanitizeError(err) })
+            )
         );
     };
 }

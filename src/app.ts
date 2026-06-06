@@ -71,7 +71,7 @@ export const getApp = (): Application => {
     const albumRepo = new AlbumRepository();
 
     const profileRepo = new ProfileRepository();
-    const profileService = new ProfileService(profileRepo);
+    const profileService = new ProfileService(profileRepo, logger);
     const profileController = new ProfileController(profileService);
 
     const integrationRepo = new IntegrationRepository();
@@ -84,7 +84,7 @@ export const getApp = (): Application => {
     const integrationController = new IntegrationController(integrationService);
 
     const authRepo = new AuthRepository();
-    const authService = new AuthService(authRepo, profileRepo);
+    const authService = new AuthService(authRepo, profileRepo, logger);
     const authController = new AuthController(authService, integrationService);
 
     const friendRepo = new FriendsRepository();

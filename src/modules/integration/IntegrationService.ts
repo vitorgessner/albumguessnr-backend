@@ -7,7 +7,6 @@ import axios from '../../config/axios.js';
 import { normalizeAlbumName, normalizeArtistName, normalizeTrackName } from './utils/normalize.js';
 import type { IUserAlbum, IUserAlbumWithInfo } from './types/IUserAlbum.js';
 import type { IAlbumInfo, IMBAlbum, IMBAlbumResponse } from './types/IAlbumInfo.js';
-import { AxiosError } from 'axios';
 import type { INormalizedArtist, INormalizedTrack } from './types/normalizedTypes.js';
 import ProfileRepository from '../profile/ProfileRepository.js';
 import winston from 'winston';
@@ -29,11 +28,7 @@ class IntegrationService {
 
         await this.lastFmUserExists(trimmedUsername);
 
-        try {
-            await this.integrationRepo.connectLastfmUser(trimmedUsername, userId);
-        } catch (err) {
-            throw new IntegrationError(500, 'Error integrating lastfmUsername', { cause: err });
-        }
+        await this.integrationRepo.connectLastfmUser(trimmedUsername, userId);
 
         return { status: 'success', message: 'User connected' };
     };
@@ -384,21 +379,14 @@ class IntegrationService {
 
     private lastFmUserExists = async (lastfmUsername: string) => {
         const trimmedUsername = lastfmUsername.trim();
-        try {
-            const response = await axios.get('', {
-                params: {
-                    method: 'user.getinfo',
-                    user: trimmedUsername,
-                },
-            });
+        const response = await axios.get('', {
+            params: {
+                method: 'user.getinfo',
+                user: trimmedUsername,
+            },
+        });
 
-            return response.data.user;
-        } catch (err) {
-            if (err instanceof AxiosError && err.status === 404)
-                throw new IntegrationError(404, 'Last.fm user not found');
-
-            throw err;
-        }
+        return response.data.user;
     };
 }
 

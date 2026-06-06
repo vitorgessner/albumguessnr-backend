@@ -3,12 +3,14 @@ import type ProfileRepository from './ProfileRepository.js';
 import fs from 'fs';
 import path from 'path';
 import { env } from '../../shared/config/env.js';
+import winston from 'winston';
+import { sanitizeError } from '../../shared/utils/sanitizeCause.js';
 
 class ProfileService {
-    private profileRepo: ProfileRepository;
-    constructor(profileRepo: ProfileRepository) {
-        this.profileRepo = profileRepo;
-    }
+    constructor(
+        private profileRepo: ProfileRepository,
+        private logger: winston.Logger
+    ) {}
 
     getProfile = async (id: string) => {
         const profile = await this.profileRepo.findByUserId(id);
@@ -38,7 +40,7 @@ class ProfileService {
             if (!avatar) return null;
             if (avatar !== 'default.svg') {
                 fs.unlink(path.join('public', 'profilePictures', avatar), (err) => {
-                    if (err) console.log(err);
+                    if (err) this.logger.error(err.message, { cause: sanitizeError(err) });
                     return;
                 });
             }
