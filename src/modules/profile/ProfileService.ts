@@ -44,21 +44,37 @@ class ProfileService {
             return { publicUrl: defaultAvatar };
         }
 
+        const newFilePath = this.getNewFilePath(file);
+        const oldFileName = this.getOldFileName(profile.avatar_url);
+
+        if (oldFileName && oldFileName !== 'default.svg') {
+            await this.supabase.storage.from('profilePictures').remove([`uploads/${oldFileName}`]);
+        }
+
+        const data = await this.uploadToStorage(newFilePath, file);
+        const url = await this.getImageUrl(newFilePath);
+
+        await this.profileRepo.edit(profile.id, trimmedUsername, bio, url);
+
+        return { path: data.path, publicUrl: url };
+    };
+
+    private getNewFilePath = (file: Express.Multer.File) => {
         const newFileExtension = file.originalname.split('.').pop();
 
         const fileName = `${Date.now()}-${Math.random()
             .toString(36)
             .substring(2, 9)}.${newFileExtension}`;
 
-        const newFilePath = `uploads/${fileName}`;
+        return `uploads/${fileName}`;
+    };
 
-        const length = profile.avatar_url.split('/').length;
-        const oldFileName = profile.avatar_url.split('/')[length - 1];
+    private getOldFileName = (imageUrl: string) => {
+        const length = imageUrl.split('/').length;
+        return imageUrl.split('/')[length - 1];
+    };
 
-        if (oldFileName && oldFileName !== 'default.svg') {
-            await this.supabase.storage.from('profilePictures').remove([`uploads/${oldFileName}`]);
-        }
-
+    private uploadToStorage = async (newFilePath: string, file: Express.Multer.File) => {
         const { data, error } = await this.supabase.storage
             .from('profilePictures')
             .upload(newFilePath, file.buffer, {
@@ -69,13 +85,15 @@ class ProfileService {
         if (error)
             throw new AuthError(500, 'Failed to save image', { cause: sanitizeError(error) });
 
+        return data;
+    };
+
+    private getImageUrl = async (newFilePath: string) => {
         const { data: publicUrlData } = this.supabase.storage
             .from('profilePictures')
             .getPublicUrl(newFilePath);
 
-        await this.profileRepo.edit(profile.id, trimmedUsername, bio, publicUrlData.publicUrl);
-
-        return { path: data.path, publicUrl: publicUrlData.publicUrl };
+        return publicUrlData.publicUrl;
     };
 }
 
