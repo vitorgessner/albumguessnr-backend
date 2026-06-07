@@ -7,7 +7,7 @@ import {
 } from '../../generated/prisma/internal/prismaNamespace.js';
 import FriendError from '../../modules/friends/errors/FriendError.js';
 import IntegrationError from '../../modules/integration/errors/IntegrationError.js';
-import { logger } from '../../config/logger.js';
+import { logger } from '../../config/logger/logger.js';
 import { sanitizeError } from '../utils/sanitizeCause.js';
 
 const globalErrorMiddleware = (err: Error, req: Request, res: Response, _: NextFunction) => {

@@ -1,4 +1,4 @@
-import { logger } from '../../config/logger';
+import { logger } from '../../config/logger/logger';
 import { sanitizeError } from './sanitizeCause';
 
 const retryRequest = async (cb: () => void, retryTimes: number) => {

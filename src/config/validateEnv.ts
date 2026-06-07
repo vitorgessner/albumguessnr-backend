@@ -1,11 +1,13 @@
 import * as z from 'zod';
 import ValidationError from '../shared/errors/ValidationError.js';
+import { initialLogger } from './logger/initialLogger.js';
+import { sanitizeError } from '../shared/utils/sanitizeCause.js';
 
 const Env = z.object({
-    PORT: z.preprocess((val) => Number(val), z.int().min(3000).max(3000)),
-    DATABASE_URL: z.string().startsWith('postgresql://postgres').endsWith('6543/postgres'),
-    DIRECT_URL: z.string().startsWith('postgresql://postgres'),
-    SUPABASE_URL: z.string().endsWith('.supabase.co'),
+    PORT: z.preprocess((val) => Number(val), z.int()),
+    DATABASE_URL: z.string().includes('postgresql://').includes('6543'),
+    DIRECT_URL: z.string().includes('postgresql://'),
+    SUPABASE_URL: z.string().includes('.supabase.co'),
     SUPABASE_API_KEY: z.string().min(40),
     SECRET_JWT: z.string().min(50),
     EMAIL: z.email(),
@@ -21,17 +23,27 @@ const Dev = Env.extend({
 });
 
 const Prod = Env.extend({
-    FRONTEND_URL: z.string().startsWith('https://albumguessnr.com'),
-    BASE_URL: z.string().startsWith('https://api.albumguessnr.com'),
+    FRONTEND_URL: z.string().startsWith('https://').includes('albumguessnr.com'),
+    BASE_URL: z.string().startsWith('https://').includes('api.albumguessnr.com'),
 });
 
 const validateEnv = (mode: string | undefined) => {
+    initialLogger.info('STARTING environment variables validation');
     if (!mode)
         throw new ValidationError(
             404,
-            'NODE_ENV is not defined in .env, please define it with either "dev" or "prod"'
+            'NODE_ENV is not defined in .env, please define it with either "dev" or "production"'
         );
-    return mode === 'dev' ? Dev.parse(process.env) : Prod.parse(process.env);
+    try {
+        return mode === 'dev' ? Dev.parse(process.env) : Prod.parse(process.env);
+    } catch (err) {
+        initialLogger.error(
+            new ValidationError(500, 'ERROR validating environment variables', {
+                cause: sanitizeError(err),
+            })
+        );
+        process.exit(1);
+    }
 };
 
 export default validateEnv;

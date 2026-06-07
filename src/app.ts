@@ -43,7 +43,7 @@ import StatsController from './modules/stats/StatsController.js';
 import statsRoutes from './modules/stats/statsRoutes.js';
 import GuessOrchestratorService from './modules/game/guess/GuessOrchestratorService.js';
 import TransactionRepository from './shared/TransactionRepo.js';
-import { logger } from './config/logger.js';
+import { logger } from './config/logger/logger.js';
 import { supabase } from './config/supabase.js';
 
 export const getApp = (): Application => {

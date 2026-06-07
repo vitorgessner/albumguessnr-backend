@@ -2,7 +2,7 @@ import type { NextFunction, Request, Response } from 'express';
 import IntegrationError from '../../integration/errors/IntegrationError.js';
 import type IntegrationService from '../../integration/IntegrationService.js';
 import AuthError from '../../auth/errors/AuthError.js';
-import { logger } from '../../../config/logger.js';
+import { logger } from '../../../config/logger/logger.js';
 
 const syncMiddleware = (integrationService: IntegrationService, map: Map<string, boolean>) => {
     return async (req: Request, res: Response, next: NextFunction) => {
