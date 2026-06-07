@@ -1,7 +1,6 @@
 import type { Request, Response } from 'express';
 import type ProfileService from './ProfileService.js';
 import AuthError from '../auth/errors/AuthError.js';
-import { env } from '../../shared/config/env.js';
 import ValidationError from '../../shared/errors/ValidationError.js';
 
 class ProfileController {
@@ -30,16 +29,11 @@ class ProfileController {
         if (!userId) throw new AuthError(401, 'Not authenticated');
 
         const file = req.file;
-        if (file) {
-            const path = `${env.BASE_URL}/profilePictures/${file?.filename}`;
-            await this.profileService.edit(userId, username, bio, path);
-        }
+        const { path, publicUrl } = await this.profileService.edit(userId, username, bio, file);
 
-        if (!file) {
-            await this.profileService.edit(userId, username, bio);
-        }
-
-        res.status(200).json({ status: 'success', message: 'Profile changed' });
+        return res
+            .status(200)
+            .json({ status: 'success', message: 'Profile changed', path, publicUrl });
     };
 }
 

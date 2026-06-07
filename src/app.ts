@@ -44,6 +44,7 @@ import statsRoutes from './modules/stats/statsRoutes.js';
 import GuessOrchestratorService from './modules/game/guess/GuessOrchestratorService.js';
 import TransactionRepository from './shared/TransactionRepo.js';
 import { logger } from './config/logger.js';
+import { supabase } from './config/supabase.js';
 
 export const getApp = (): Application => {
     const app = express();
@@ -71,7 +72,7 @@ export const getApp = (): Application => {
     const albumRepo = new AlbumRepository();
 
     const profileRepo = new ProfileRepository();
-    const profileService = new ProfileService(profileRepo, logger);
+    const profileService = new ProfileService(profileRepo, logger, supabase);
     const profileController = new ProfileController(profileService);
 
     const integrationRepo = new IntegrationRepository();

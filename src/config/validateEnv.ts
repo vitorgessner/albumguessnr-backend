@@ -3,8 +3,10 @@ import ValidationError from '../shared/errors/ValidationError.js';
 
 const Env = z.object({
     PORT: z.preprocess((val) => Number(val), z.int().min(3000).max(3000)),
-    DATABASE_URL: z.string().startsWith('postgresql://postgres').endsWith('?pgbouncer=true'),
+    DATABASE_URL: z.string().startsWith('postgresql://postgres').endsWith('6543/postgres'),
     DIRECT_URL: z.string().startsWith('postgresql://postgres'),
+    SUPABASE_URL: z.string().endsWith('.supabase.co'),
+    SUPABASE_API_KEY: z.string().min(40),
     SECRET_JWT: z.string().min(50),
     EMAIL: z.email(),
     PASSWORD: z.string().min(19),
