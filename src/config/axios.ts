@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { env } from '../../src/shared/config/env.js';
+import { env } from '../shared/config/env.js';
 
 const axiosInstance = axios.create({
     baseURL: 'http://ws.audioscrobbler.com/2.0/',
