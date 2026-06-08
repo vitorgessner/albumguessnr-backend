@@ -23,8 +23,8 @@ const Dev = Env.extend({
 });
 
 const Prod = Env.extend({
-    FRONTEND_URL: z.string().startsWith('https://').includes('albumguessnr.com'),
-    BASE_URL: z.string().startsWith('https://').includes('api.albumguessnr.com'),
+    FRONTEND_URL: z.string().startsWith('https://'),
+    BASE_URL: z.string().startsWith('https://'),
 });
 
 const validateEnv = (mode: string | undefined) => {
