@@ -3,7 +3,7 @@ import ValidationError from '../../shared/errors/ValidationError.js';
 import type AuthRepository from './AuthRepository.js';
 import { randomBytes } from 'node:crypto';
 import jwt from 'jsonwebtoken';
-import transporter from './utils/transporter.js';
+import { resend } from './utils/transporter.js';
 import AuthError from './errors/AuthError.js';
 import type { UserCreateInput } from '../../generated/prisma/models.js';
 import { env } from '../../shared/config/env.js';
@@ -74,7 +74,6 @@ class AuthService {
             this.sendMail(
                 email,
                 'Account creation attempt',
-                '',
                 buildEmailTemplate(
                     'Account creation attempt',
                     // eslint-disable-next-line max-len
@@ -117,7 +116,6 @@ class AuthService {
         this.sendMail(
             email,
             'Email already verified',
-            '',
             buildEmailTemplate(
                 'Email already verified',
                 'Your email was already verified by our system, please try logging in instead'
@@ -148,7 +146,6 @@ class AuthService {
         this.sendMail(
             email,
             'Forgot your password',
-            '',
             buildEmailTemplate(
                 'Reset password',
                 'Please click on the button below to change your password',
@@ -278,21 +275,12 @@ class AuthService {
         });
     };
 
-    private sendMail = (to: string, subject: string, text: string, html?: string) => {
-        return new Promise((resolve, reject) => {
-            transporter.sendMail(
-                {
-                    from: env.EMAIL,
-                    to,
-                    subject,
-                    text,
-                    html,
-                },
-                (error, info) => {
-                    if (error) return reject(error);
-                    return resolve(info.response);
-                }
-            );
+    private sendMail = async (to: string, subject: string, html: string) => {
+        await resend.emails.send({
+            from: 'noreply@albumguessnr.com',
+            to,
+            subject,
+            html,
         });
     };
 
@@ -316,7 +304,6 @@ class AuthService {
         this.sendMail(
             email,
             'Verify your account',
-            'Please click on the link below to verify your account',
             buildEmailTemplate(
                 'Verify your account',
                 // eslint-disable-next-line max-len

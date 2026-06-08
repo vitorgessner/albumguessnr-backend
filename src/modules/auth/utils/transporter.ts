@@ -1,15 +1,5 @@
-import nodemailer from 'nodemailer';
 import { env } from '../../../shared/config/env.js';
 
-const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    host: 'smtp.gmail.com',
-    secure: false,
-    port: 587,
-    auth: {
-        user: env.EMAIL,
-        pass: env.PASSWORD,
-    },
-});
+import { Resend } from 'resend';
 
-export default transporter;
+export const resend = new Resend(env.RESEND_API_KEY);
