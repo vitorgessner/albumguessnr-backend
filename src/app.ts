@@ -135,7 +135,7 @@ export const getApp = (): Application => {
                 '/leaderboards',
                 // { url: /^\/profile\/[\w-]+$/ },
                 { url: /^\/friend\/[\w-]+$/, method: 'GET' },
-                { url: /^\/leaderboards\/[\w-]+$/, method: 'GET' },
+                { url: /^\/leaderboards(\/.*)?$/, method: 'GET' },
             ],
         })
     );
