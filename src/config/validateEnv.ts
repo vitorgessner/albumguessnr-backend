@@ -14,7 +14,7 @@ const Env = z.object({
     API_KEY: z.string().min(32),
     NODE_ENV: z.string().min(3),
     LOG_LEVEL: z.string().min(4),
-    DEFAULT_AVATAR: z.string().startsWith('https://').endsWith('default.svg'),
+    DEFAULT_AVATAR: z.string().startsWith('https://'),
 });
 
 const Dev = Env.extend({
