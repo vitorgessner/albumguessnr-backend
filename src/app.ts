@@ -45,6 +45,7 @@ import GuessOrchestratorService from './modules/game/guess/GuessOrchestratorServ
 import TransactionRepository from './shared/TransactionRepo.js';
 import { logger } from './config/logger/logger.js';
 import { supabase } from './config/supabase.js';
+import { health } from './shared/utils/health.js';
 
 export const getApp = (): Application => {
     const app = express();
@@ -121,6 +122,8 @@ export const getApp = (): Application => {
         res.set('Cache-Control', 'no-store');
         next();
     });
+
+    app.get('/health', health);
 
     app.use('/', authRoutes(authController));
 
