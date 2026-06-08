@@ -44,7 +44,7 @@ class StatsRepository {
     updateUserStats = async (userId: string, config: IConfig, tx?: Prisma.TransactionClient) => {
         const client = tx || prisma;
         const data: Prisma.UserStatsUpdateInput = {};
-        const album = await this.findGuessedAlbum(userId, config.album.id);
+        const album = await this.findGuessedAlbum(userId, config.album.id, tx);
 
         if (config.album.isGuessed !== undefined && config.album.isGuessed)
             data.guessedAlbums = { increment: 1 };
@@ -77,13 +77,21 @@ class StatsRepository {
         });
     };
 
-    private findGuessedAlbum = async (userId: string, albumId: string) => {
-        return await prisma.userAlbumStats.findUnique({
+    private findGuessedAlbum = async (
+        userId: string,
+        albumId: string,
+        tx?: Prisma.TransactionClient
+    ) => {
+        const client = tx ?? prisma;
+        return await client.userAlbumStats.findUnique({
             where: {
                 userId_albumId: {
                     userId,
                     albumId,
                 },
+            },
+            select: {
+                timesGuessed: true,
             },
         });
     };

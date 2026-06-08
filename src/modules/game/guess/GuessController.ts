@@ -48,7 +48,7 @@ class GuessController {
         );
 
         const [finalScore] = await Promise.all([
-            this.scoringService.handleBestScore(userId, albumId, timeSpent, guessedCategories),
+            this.scoringService.handleBestScore(userId, albumId, totalScore),
             this.guessOrchestratorService.processGuessAttempt(
                 userId,
                 albumId,

@@ -25,26 +25,28 @@ class ScoringService {
     handleBestScore = async (
         userId: string,
         albumId: string,
-        timeSpent: number,
-        guessedCategories: GuessedCategories
+        totalScoreWithCategories: {
+            totalScore: number;
+            categoriesWithScore: {
+                score: number;
+                category: 'ALBUM' | 'ARTIST' | 'GENRE' | 'YEAR' | 'TRACKLIST';
+            }[];
+        }
     ) => {
-        const totalScoreWithCategories = await this.calculateTotalScore(
-            albumId,
-            timeSpent,
-            guessedCategories
-        );
         const date = new Date();
 
         const previousScore = await this.scoringRepo.findBestScore(userId, albumId);
-        const isNewBestScore =
-            (previousScore._max.totalScore ?? 0) < totalScoreWithCategories.totalScore;
+        const oldGlobalBestScore = previousScore._max.totalScore ?? 0;
+
+        const isNewBestScore = oldGlobalBestScore < totalScoreWithCategories.totalScore;
 
         await this.scoringRepo.handleBestScore(
             userId,
             albumId,
             date,
             totalScoreWithCategories.totalScore,
-            totalScoreWithCategories.categoriesWithScore
+            totalScoreWithCategories.categoriesWithScore,
+            oldGlobalBestScore
         );
 
         return { score: Math.round(totalScoreWithCategories.totalScore / 100), isNewBestScore };
