@@ -1,4 +1,5 @@
 import { prisma } from '../../config/prisma.js';
+import { FailedAlbumsSyncCreateInput } from '../../generated/prisma/models.js';
 import { IUpdateSync } from './types/IUpdateSync.js';
 import { IUserAlbumFamiliarity } from './types/IUserAlbumFamiliarity.js';
 
@@ -125,6 +126,24 @@ class IntegrationRepository {
             },
             update: {
                 timesListened: album.playcount,
+            },
+        });
+    };
+
+    saveFailedSync = async (albumData: FailedAlbumsSyncCreateInput) => {
+        return await prisma.failedAlbumsSync.upsert({
+            where: {
+                albumName_artist_apiError: {
+                    albumName: albumData.albumName,
+                    artist: albumData.artist,
+                    apiError: albumData.apiError,
+                },
+            },
+            create: {
+                ...albumData,
+            },
+            update: {
+                ...albumData,
             },
         });
     };

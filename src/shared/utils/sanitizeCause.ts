@@ -1,18 +1,29 @@
+import { AxiosError } from 'axios';
+import { ZodError } from 'zod';
 import {
     PrismaClientInitializationError,
     PrismaClientKnownRequestError,
     PrismaClientUnknownRequestError,
 } from '@prisma/client/runtime/client';
-import { AxiosError } from 'axios';
-import { ZodError } from 'zod';
 
-export const sanitizeError = (err: unknown) => {
+type SanitizedError = {
+    message: string;
+    status?: number | undefined;
+    params?: Record<string, string> | undefined;
+    data?: string | undefined;
+    issues?: Array<{ path: string; message: string; code: string }> | undefined;
+    code?: string | undefined;
+    meta?: Record<string, string | number | boolean | null> | undefined;
+    errorCode?: string | undefined;
+};
+
+export const sanitizeError = (err: unknown): SanitizedError => {
     if (err instanceof AxiosError) {
         return {
             message: err.message,
             status: err.response?.status,
             params: err.config?.params,
-            data: err.response?.data,
+            data: JSON.stringify(err.response?.data),
         };
     }
     if (err instanceof ZodError) {
@@ -29,7 +40,7 @@ export const sanitizeError = (err: unknown) => {
         return {
             message: err.message,
             code: err.code,
-            meta: err.meta,
+            meta: err.meta as Record<string, string | number | boolean | null> | undefined,
         };
     }
     if (err instanceof PrismaClientUnknownRequestError) {

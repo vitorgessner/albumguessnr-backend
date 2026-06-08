@@ -29,6 +29,7 @@ model User {
   userAlbumStats      UserAlbumStats[]
   sentRequests        UserFriends[]       @relation("sentRequests")
   receivedRequests    UserFriends[]       @relation("receivedRequests")
+  failedAlbumsSync    FailedAlbumsSync[]
 }
 
 model UserStats {
@@ -241,4 +242,31 @@ model Track {
   guessedTracks  GuessedTrack[]
 
   @@unique([normalizedName, albumId])
+}
+
+model FailedAlbumsSync {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  albumName String
+  mbid String?
+  artist String
+  normalizedAlbum String
+  cause Json
+  status SyncStatus
+  apiError PossibleApis
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([albumName, artist, apiError])
+}
+
+enum SyncStatus {
+  PENDING
+  RESOLVED
+}
+
+enum PossibleApis {
+  LASTFM
+  MUSICBRAINZ
 }

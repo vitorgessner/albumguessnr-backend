@@ -48,8 +48,12 @@ class IntegrationService {
             const childLogger = this.instantiateChildLogger(userId, album);
             childLogger.info('Fetching album ' + count++);
 
-            const albumInfo = await this.fetchAlbumInfoFromLastfm(album, childLogger);
-            const musicBrainzAlbum = await this.fetchAlbumFromMusicBrainz(album, childLogger);
+            const albumInfo = await this.fetchAlbumInfoFromLastfm(album, childLogger, userId);
+            const musicBrainzAlbum = await this.fetchAlbumFromMusicBrainz(
+                album,
+                childLogger,
+                userId
+            );
 
             const year = musicBrainzAlbum?.['first-release-date'].split('-')[0];
             const tags = musicBrainzAlbum?.tags ?? albumInfo?.tags?.tag ?? [];
@@ -71,7 +75,8 @@ class IntegrationService {
                 tags,
                 normalizedArtists,
                 normalizedTracks,
-                childLogger
+                childLogger,
+                userId
             );
         }
 
@@ -112,6 +117,43 @@ class IntegrationService {
         return albums;
     };
 
+    private saveFailedAlbumSync = async (
+        album: IUserAlbumWithInfo,
+        userId: string,
+        apiError: 'LASTFM' | 'MUSICBRAINZ',
+        logger: winston.Logger,
+        err: unknown
+    ) => {
+        logger.error(
+            new IntegrationError(500, 'Failed to fetch albums tracks', {
+                cause: sanitizeError(err),
+            })
+        );
+
+        try {
+            await this.integrationRepo.saveFailedSync({
+                albumName: album.name,
+                apiError,
+                artist: album.artist.name,
+                normalizedAlbum: album.normalizedName + ' ' + album.normalizedArtist,
+                status: 'PENDING',
+                mbid: album.mbid,
+                cause: sanitizeError(err),
+                user: {
+                    connect: {
+                        id: userId,
+                    },
+                },
+            });
+        } catch (err) {
+            logger.error(
+                new IntegrationError(500, 'Failed to save failed album sync', {
+                    cause: sanitizeError(err),
+                })
+            );
+        }
+    };
+
     private instantiateChildLogger = (userId: string, album: IUserAlbumWithInfo) => {
         const childLogger = this.logger.child({
             requestId: userId,
@@ -139,7 +181,8 @@ class IntegrationService {
 
     private fetchAlbumInfoFromLastfm = async (
         album: IUserAlbumWithInfo,
-        logger: winston.Logger
+        logger: winston.Logger,
+        userId: string
     ) => {
         try {
             const info = album.mbid
@@ -150,7 +193,7 @@ class IntegrationService {
                   )) ?? null);
 
             if (!info || !info.tracks || !info.tracks.track) {
-                logger.warn(new IntegrationError(404, 'Album returned no albums'));
+                logger.warn(new IntegrationError(404, 'Album returned no tracks'));
             }
 
             return info;
@@ -160,13 +203,15 @@ class IntegrationService {
                     cause: sanitizeError(err),
                 })
             );
+            await this.saveFailedAlbumSync(album, userId, 'LASTFM', logger, err);
             return undefined;
         }
     };
 
     private fetchAlbumFromMusicBrainz = async (
         album: IUserAlbumWithInfo,
-        logger: winston.Logger
+        logger: winston.Logger,
+        userId: string
     ) => {
         try {
             const musicBrainzAlbum = await this.findAlbumFromMusicBrainz(
@@ -184,12 +229,12 @@ class IntegrationService {
 
             return musicBrainzAlbum;
         } catch (err) {
-            logger.log(
-                'fatal',
+            logger.error(
                 new IntegrationError(500, 'Failed to fetch album on MusicBrainz', {
                     cause: sanitizeError(err),
                 })
             );
+            await this.saveFailedAlbumSync(album, userId, 'MUSICBRAINZ', logger, err);
             return undefined;
         }
     };
@@ -201,7 +246,8 @@ class IntegrationService {
         tags: Array<{ name: string }> | undefined,
         normalizedArtists: Array<INormalizedArtist> | null,
         normalizedTracks: Array<INormalizedTrack> | INormalizedTrack,
-        logger: winston.Logger
+        logger: winston.Logger,
+        userId: string
     ) => {
         try {
             const newAlbum = await this.createNewAlbum(
@@ -224,6 +270,7 @@ class IntegrationService {
                     cause: sanitizeError(err),
                 })
             );
+            await this.saveFailedAlbumSync(album, userId, 'LASTFM', logger, err);
             return undefined;
         }
     };
