@@ -38,13 +38,14 @@ class GuessController {
 
         if (typeof albumId !== 'string' || typeof timeSpent !== 'number')
             throw new ValidationError(400, 'Album id is not string or timeSpent is not a number');
-        if (!(await this.guessService.doesAlbumExists(albumId)))
-            throw new ValidationError(404, 'Album not found');
+
+        const tracksLengthCount = await this.scoringService.getTracksLength(albumId);
 
         const totalScore = await this.scoringService.calculateTotalScore(
             albumId,
             timeSpent,
-            guessedCategories
+            guessedCategories,
+            tracksLengthCount
         );
 
         const [finalScore] = await Promise.all([

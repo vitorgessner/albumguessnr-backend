@@ -57,17 +57,17 @@ class ScoringService {
     calculateTotalScore = async (
         albumId: string,
         timeSpent: number,
-        guessedCategories: GuessedCategories
+        guessedCategories: GuessedCategories,
+        tracksCountId: number
     ) => {
-        const length = await this.getTracksLength(albumId);
-        const pointsConfig = basePointsAndExpectedTimePerCategory(length.id);
+        const pointsConfig = basePointsAndExpectedTimePerCategory(tracksCountId);
 
         let totalTime = 0;
         const categories = [];
 
         for (const [key] of Object.entries(guessedCategories)) {
             const points = this.calculateCategoryScore(
-                length.id,
+                tracksCountId,
                 key as GameCategory,
                 guessedCategories
             );
@@ -101,13 +101,10 @@ class ScoringService {
     };
 
     getTracksLength = async (albumId: string) => {
-        const album = await this.albumRepo.get(albumId);
-        if (!album) throw new ValidationError(404, 'No album found');
-
         const tracksLength = await this.albumRepo.getTracksLength(albumId);
         if (!tracksLength) throw new ValidationError(500, 'Some error occurred');
 
-        return tracksLength._count;
+        return tracksLength._count.id;
     };
 
     private calculateCategoryScore = (

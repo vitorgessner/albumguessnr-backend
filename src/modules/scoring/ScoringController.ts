@@ -18,9 +18,7 @@ class ScoringController {
         if (!albumId) throw new ValidationError(400, 'No albumId passed');
         if (typeof albumId === 'object') throw new ValidationError(400, 'AlbumId must be a string');
 
-        const tracksLength = await this.scoringService
-            .getTracksLength(albumId)
-            .then((res) => res.id);
+        const tracksLength = await this.scoringService.getTracksLength(albumId).then((res) => res);
 
         const pointsConfig = basePointsAndExpectedTimePerCategory(tracksLength);
 
