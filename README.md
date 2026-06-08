@@ -15,8 +15,11 @@ pelo usuário usando seu username do Last.fm, normalizar nomes de álbuns, artis
 - **Banco de dados**: Supabase (PostgreSQL)
 - **HTTP Client**: Axios
 - **Auth**: JWT (HttpOnly cookies) + Refresh Tokens
-- **Email**: Nodemailer
-- **Outros**: cookie-parser, bcrypt
+- **Email**: Resend
+- **Outros**: cookie-parser, bcrypt, winston
+- **Deploy**: Render
+- **Monitoramento**: Uptimerobot
+
 
 ## Arquitetura
 
@@ -39,7 +42,7 @@ src/
 
 Cada módulo possui sua própria camada de `Controller → Service → Repository`, com injeção de dependência manual.
 
-## Módulos
+## Principais Módulos
 
 ### Auth
 
@@ -54,16 +57,18 @@ Cada módulo possui sua própria camada de `Controller → Service → Repositor
 - Entidade `LastFmIntegration` separada do `User`/`Profile`
 - Sync de álbuns via `user.getTopAlbums` (50 álbuns por página, paginado)
 - Enriquecimento de dados via `album.getInfo` (tracks e gêneros/tags)
-- Condição de guarda: `album.getInfo` só é chamado para álbuns sem tracks no banco
 - Fire-and-forget com `Map<userId, boolean>` para prevenir race conditions
 - Callback pattern para reset de estado sem acoplamento
 - Sync progressivo: `lastPageSynced` e `lastSyncedAt` (cadência diária)
-- Singles (álbuns sem tracklist) são ignorados no sync
-- Álbuns não encontrados no Last.fm (404) são pulados sem interromper o sync
+- Álbuns não encontrados no Last.fm (404) ou no MusicBrainz ou mesmo sem tracks, são salvos e logados os respectivos campos faltantes
 
-### Album
+### Game/Guess
 
-- Deduplicação de tracks com mesmo `normalizedName` antes do insert
+- `GuessOrchestratorServic` e `GuessController` cuidam da orquestração de registrar uma tentativa de guess para cada categoria e para o álbum num geral com o próprio módulo de **Guess**, cálculo de pontuação usando o módulo **Scoring**, incremento de userStats usando o módulo de **Stats**, 
+
+### Stats e Scoring
+
+- Ambos são atualizados ao realizar uma guess para se evitar queries complexas ao banco.
 
 ## Normalização
 
@@ -114,32 +119,26 @@ User
 - [x] Zod — validação completa de env vars e inputs
 - [x] Refresh route
 - [x] Exibir quantas vezes o usuário adivinhou o álbum (`UserAlbumStats`)
-
-## O que está aberto / falta fazer
-
-- [ ] Comentar código
-- [ ] Melhorias gerais e correção de bugs
-- [ ] Zod schemas na edição de perfil
-
-## Até 26/05
-
 - [x] Ver perfil de outros usuários
 - [x] Adicionar outros usuários, como amigos
 - [x] Ao adivinhar um álbum, exibir amigos que adivinharam também
 - [x] Ganhar pontos ao acertar características do álbum
 - [x] Ganhar pontos de acordo com a velocidade da tentativa
-- [ ] Leaderboard de pontos entre amigos
-- [ ] Leaderboard global
-- [ ] Visualização de estatísticas no perfil do usuário
-- [ ] Exibir histórico de adivinhações
-- [ ] Filtros para o histórico de adivinhações
+- [x] Leaderboard de pontos entre amigos
+- [x] Leaderboard global
+- [x] Visualização de estatísticas no perfil do usuário
+- [x] Melhorias gerais e correção de bugs
+- [x] Migrar imagens de usuário para Supabase Storage (remover pasta `public` do servidor)
+
+## O que está aberto / falta fazer
+
+- [ ] Zod schemas na edição de perfil
 
 ### Pós-MVP
 
 - [ ] BullMQ + Redis (job queues para sync em background)
 - [ ] Last.fm e outros serviços de streaming de música OAuth
 - [ ] Índices de banco de dados
-- [ ] Migrar imagens de usuário para Supabase Storage (remover pasta `public` do servidor)
 - [ ] Multiplayer
 
 ## Padrões e decisões de design
@@ -148,4 +147,4 @@ User
 - **Repository**: repositórios nunca contêm lógica de negócio
 - **Tratamento de Erros** (ex: email de notificação): envoltas em try/catch que loga e continua
 - **Banco de Dados**: relacionamentos ausentes são modelados como entidades separadas (ex: `LastFmIntegration`)
-- **Early returns** no lugar de condicionais aninhados
+- **Endpoint health**: Serve tanto para saber o estado da aplicação como também para o Uptimerobot deixar o deploy do Render ativo sem entrar em estado inativo

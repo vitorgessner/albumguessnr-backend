@@ -132,8 +132,10 @@ export const getApp = (): Application => {
             path: [
                 // '/profile',
                 '/friend',
+                '/leaderboards',
                 // { url: /^\/profile\/[\w-]+$/ },
                 { url: /^\/friend\/[\w-]+$/, method: 'GET' },
+                { url: /^\/leaderboards\/[\w-]+$/, method: 'GET' },
             ],
         })
     );
