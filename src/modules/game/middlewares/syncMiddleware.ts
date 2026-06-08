@@ -17,7 +17,10 @@ const syncMiddleware = (integrationService: IntegrationService, map: Map<string,
         const stats = await integrationService.getLastSyncedStats(lastfmUsername);
         const lastSyncedAt = stats?.lastSyncedAt.getTime() ?? Date.now();
 
-        if (map.get(userId) || Date.now() - lastSyncedAt < 1000 * 60 * 60 * 24) {
+        if (
+            stats?.lastPageSynced !== 0 &&
+            (map.get(userId) || Date.now() - lastSyncedAt < 1000 * 60 * 60 * 24)
+        ) {
             logger.info('Skipping albums syncing', { requestId: req.userId });
             return next();
         }
