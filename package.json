@@ -10,7 +10,7 @@
         "start:prod": "npm run build && npm run start",
         "lint": "eslint .",
         "format": "prettier --write \"**/*.{ts,js,json,md,yml,yaml}\"",
-        "prestart": "npx prisma db push --accept-data-loss",
+        "prestart": "prisma migrate deploy",
         "postinstall": "prisma generate"
     },
     "keywords": [],
