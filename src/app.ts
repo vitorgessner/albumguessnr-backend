@@ -85,7 +85,7 @@ export const getApp = (): Application => {
     const integrationController = new IntegrationController(integrationService);
 
     const authRepo = new AuthRepository();
-    const authService = new AuthService(authRepo, profileRepo, logger);
+    const authService = new AuthService(authRepo, profileRepo, logger, env.DEFAULT_AVATAR);
     const authController = new AuthController(authService, integrationService);
 
     const friendRepo = new FriendsRepository();

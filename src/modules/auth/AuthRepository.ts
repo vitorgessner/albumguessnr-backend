@@ -69,7 +69,7 @@ class AuthRepository {
         });
     };
 
-    create = async (user: UserCreateInput) => {
+    create = async (user: UserCreateInput, default_avatar: string) => {
         return await prisma.user.create({
             data: {
                 email: user.email,
@@ -77,7 +77,7 @@ class AuthRepository {
                 profile: {
                     create: {
                         username: user.email.split('@')[0]! + Math.round(Math.random() * 100000000),
-                        avatar_url: 'http://localhost:3000/profilePictures/default.svg',
+                        avatar_url: default_avatar,
                         bio: '',
                     },
                 },

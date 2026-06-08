@@ -17,7 +17,8 @@ class AuthService {
     constructor(
         private authRepo: AuthRepository,
         private profileRepo: ProfileRepository,
-        private logger: winston.Logger
+        private logger: winston.Logger,
+        private default_avatar: string
     ) {}
 
     getAll = async () => {
@@ -90,7 +91,7 @@ class AuthService {
         const hashedPassword = await bcrypt.hash(password, 10);
         const newUser = this.generateUser(email, hashedPassword);
 
-        await this.authRepo.create(newUser);
+        await this.authRepo.create(newUser, this.default_avatar);
 
         await this.sendTokenToEmail(email);
 
