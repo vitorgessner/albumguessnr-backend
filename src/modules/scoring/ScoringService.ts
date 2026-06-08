@@ -40,14 +40,16 @@ class ScoringService {
 
         const isNewBestScore = oldGlobalBestScore < totalScoreWithCategories.totalScore;
 
-        await this.scoringRepo.handleBestScore(
-            userId,
-            albumId,
-            date,
-            totalScoreWithCategories.totalScore,
-            totalScoreWithCategories.categoriesWithScore,
-            oldGlobalBestScore
-        );
+        if (isNewBestScore) {
+            await this.scoringRepo.handleBestScore(
+                userId,
+                albumId,
+                date,
+                totalScoreWithCategories.totalScore,
+                totalScoreWithCategories.categoriesWithScore,
+                oldGlobalBestScore
+            );
+        }
 
         return { score: Math.round(totalScoreWithCategories.totalScore / 100), isNewBestScore };
     };

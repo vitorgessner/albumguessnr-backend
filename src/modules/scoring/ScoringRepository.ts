@@ -78,49 +78,6 @@ class ScoringRepository {
         );
     };
 
-    // private deletePreviousBestScore = async (
-    //     userId: string,
-    //     albumId: string,
-    //     date: Date,
-    //     categories: Array<CategoriesWithScore>,
-    //     tx?: Prisma.TransactionClient
-    // ) => {
-    //     const client = tx || prisma;
-    //     const startOfDay = getStartOfDay(date);
-
-    //     return await client.userAlbumScores.deleteMany({
-    //         where: {
-    //             userId,
-    //             albumId,
-    //             date: startOfDay,
-    //             gameMode: {
-    //                 in: categories.map((c) => c.category),
-    //             },
-    //         },
-    //     });
-    // };
-
-    // private addNewBestScore = async (
-    //     userId: string,
-    //     albumId: string,
-    //     date: Date,
-    //     categories: Array<CategoriesWithScore>,
-    //     tx?: Prisma.TransactionClient
-    // ) => {
-    //     const client = tx || prisma;
-    //     const startOfDay = getStartOfDay(date);
-
-    //     return await client.userAlbumScores.createMany({
-    //         data: categories.map((c) => ({
-    //             userId,
-    //             albumId,
-    //             date: startOfDay,
-    //             gameMode: c.category,
-    //             bestScore: c.score,
-    //         })),
-    //     });
-    // };
-
     private incrementUserTotalScore = async (
         userId: string,
         newScore: number,
@@ -129,18 +86,14 @@ class ScoringRepository {
     ) => {
         const pointsToIncrement = newScore - oldGlobalBestScore;
 
-        if (pointsToIncrement > 0) {
-            return await client.userStats.update({
-                where: { userId },
-                data: {
-                    totalScore: {
-                        increment: pointsToIncrement,
-                    },
+        return await client.userStats.update({
+            where: { userId },
+            data: {
+                totalScore: {
+                    increment: pointsToIncrement,
                 },
-            });
-        }
-
-        return;
+            },
+        });
     };
 }
 
