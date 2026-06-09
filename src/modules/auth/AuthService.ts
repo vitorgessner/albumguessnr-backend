@@ -136,42 +136,52 @@ class AuthService {
         const emailExists = await this.authRepo.findByEmail(email);
         if (!emailExists) return;
 
-        const username = emailExists.profile?.username;
+        await this.sendPasswordResetTokenToEmail(email);
 
-        const childLogger = this.instantiateChildLogger({
-            userId: emailExists?.id,
-            email: emailExists?.email,
-            username,
-        });
+        return { status: 'success' };
+    };
 
+    editPassword = async (passwordResetToken: string, password: string) => {
+        if (!passwordResetToken) throw new ValidationError(400, 'Token should be provided');
+
+        const verificationToken = await this.authRepo.findByToken(passwordResetToken);
+        if (!verificationToken) throw new AuthError(404, 'Token not found');
+        if (verificationToken.expirationTime.getTime() < new Date(Date.now()).getTime())
+            throw new AuthError(401, 'Token expired');
+        if (!verificationToken.user.emailVerified)
+            throw new AuthError(401, 'Email is not verified');
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const response = await this.authRepo.editPassword(
+            verificationToken.user.email,
+            hashedPassword
+        );
+        await this.authRepo.deleteVerificationToken(passwordResetToken);
+
+        return response;
+    };
+
+    private sendPasswordResetTokenToEmail = async (email: string) => {
+        await this.authRepo.deleteTokens(email);
+        const token = this.generateToken();
+        const passwordResetToken = await this.authRepo.createVerificationToken(token, email);
+        const resetToken = passwordResetToken.token;
+
+        const childLogger = this.instantiateChildLogger({ email });
         this.sendMail(
             email,
             'Forgot your password',
             buildEmailTemplate(
                 'Reset password',
                 'Please click on the button below to change your password',
-                'If it was not you, please, ignore this email',
-                `/auth/${username}/passwordChange`
+                'If it was not you, please ignore this email.',
+                `/auth/passwordChange/${resetToken}`
             )
         ).catch((err) =>
             childLogger.error(
                 new AuthError(500, 'Failed to send email', { cause: sanitizeError(err) })
             )
         );
-
-        return { status: 'success' };
-    };
-
-    editPassword = async (username: string, password: string) => {
-        if (!username) throw new ValidationError(404, 'Username should be provided');
-
-        const email = await this.profileRepo
-            .findByUserUsername(username)
-            .then((res) => res?.user.email);
-        if (!email) throw new AuthError(404, 'Email not found');
-
-        const hashedPassword = await bcrypt.hash(password, 10);
-        return await this.authRepo.editPassword(email, hashedPassword);
     };
 
     verifyEmail = async (userVerificationToken: string) => {
@@ -194,7 +204,10 @@ class AuthService {
         if (!user) throw new AuthError(404, 'user does not exists');
 
         const refreshToken = this.generateToken();
-        const refresh = await this.authRepo.createRefreshToken(refreshToken, user?.email);
+        const refresh = await this.authRepo.createRefreshToken(
+            refreshToken,
+            verificationToken.user.email
+        );
 
         return {
             token,

@@ -10,7 +10,6 @@ class ProfileRepository {
                 user: {
                     select: {
                         lastfmIntegration: true,
-                        email: true,
                         userStats: true,
                         createdAt: true,
                         id: true,
@@ -29,7 +28,6 @@ class ProfileRepository {
                 user: {
                     select: {
                         lastfmIntegration: true,
-                        email: true,
                         userStats: true,
                         createdAt: true,
                         id: true,

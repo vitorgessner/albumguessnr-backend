@@ -16,6 +16,10 @@ class AuthRepository {
             include: {
                 profile: true,
             },
+            omit: {
+                email: true,
+                password: true,
+            },
         });
     };
 
@@ -23,6 +27,10 @@ class AuthRepository {
         return await prisma.user.findMany({
             include: {
                 lastfmIntegration: true,
+            },
+            omit: {
+                email: true,
+                password: true,
             },
         });
     };
@@ -46,7 +54,11 @@ class AuthRepository {
                 token: userVerificationToken,
             },
             include: {
-                user: true,
+                user: {
+                    omit: {
+                        password: true,
+                    },
+                },
             },
         });
     };
@@ -64,6 +76,7 @@ class AuthRepository {
                 userStats: true,
             },
             omit: {
+                email: true,
                 password: true,
             },
         });
@@ -108,7 +121,11 @@ class AuthRepository {
                 token,
             },
             include: {
-                user: true,
+                user: {
+                    omit: {
+                        password: true,
+                    },
+                },
             },
         });
     };
@@ -131,6 +148,14 @@ class AuthRepository {
                         email,
                     },
                 },
+            },
+        });
+    };
+
+    deleteVerificationToken = async (token: string) => {
+        return await prisma.verificationToken.delete({
+            where: {
+                token,
             },
         });
     };

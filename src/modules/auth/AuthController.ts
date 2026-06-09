@@ -99,14 +99,17 @@ class AuthController {
     };
 
     forgot = async (req: Request, res: Response) => {
-        this.authService.forgot(req.body.email);
+        await this.authService.forgot(req.body.email);
 
-        res.json({ status: 'success', message: 'Verify your email' });
+        return res.json({
+            status: 'success',
+            message: 'If your email exists, password reset instructions were sent',
+        });
     };
 
     changePassword = async (req: Request, res: Response) => {
-        const { username } = req.params;
-        await this.authService.editPassword(username as string, req.body.password);
+        const { passwordResetToken } = req.params;
+        await this.authService.editPassword(passwordResetToken as string, req.body.password);
 
         return res
             .status(200)
