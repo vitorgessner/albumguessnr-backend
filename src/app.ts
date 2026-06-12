@@ -46,6 +46,7 @@ import TransactionRepository from './shared/TransactionRepo.js';
 import { logger } from './config/logger/logger.js';
 import { supabase } from './config/supabase.js';
 import { health } from './shared/utils/health.js';
+import { optionalAuth } from './modules/auth/middlewares/optionalAuth.js';
 
 export const getApp = (): Application => {
     const app = express();
@@ -127,32 +128,20 @@ export const getApp = (): Application => {
 
     app.use('/', authRoutes(authController));
 
-    app.use(
-        authMiddleware.unless({
-            path: [
-                // '/profile',
-                '/friend',
-                '/leaderboards',
-                // { url: /^\/profile\/[\w-]+$/ },
-                { url: /^\/friend\/[\w-]+$/, method: 'GET' },
-                { url: /^\/leaderboards(\/.*)?$/, method: 'GET' },
-            ],
-        })
-    );
-    app.use('/profile', profileRoutes(profileController));
-    app.use('/integration', integrationRoutes(integrationController));
+    app.use('/profile', optionalAuth, profileRoutes(profileController));
+    app.use('/integration', authMiddleware, integrationRoutes(integrationController));
 
     const map = new Map<string, boolean>();
-    app.use('/game', syncMiddleware(integrationService, map), gameRoutes());
-    app.use('/guess', guessRoutes(guessController));
+    app.use('/game', authMiddleware, syncMiddleware(integrationService, map), gameRoutes());
+    app.use('/guess', authMiddleware, guessRoutes(guessController));
 
-    app.use('/friend', friendsRoutes(friendController));
+    app.use('/friend', authMiddleware, friendsRoutes(friendController));
 
-    app.use('/scoring', scoringRoutes(scoringController));
+    app.use('/scoring', authMiddleware, scoringRoutes(scoringController));
 
-    app.use('/leaderboards', leaderboardsRoutes(leaderboardsController));
+    app.use('/leaderboards', optionalAuth, leaderboardsRoutes(leaderboardsController));
 
-    app.use('/stats', statsRoutes(statsController));
+    app.use('/stats', optionalAuth, statsRoutes(statsController));
 
     app.use(globalErrorMiddleware);
 

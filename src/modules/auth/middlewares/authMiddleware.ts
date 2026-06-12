@@ -2,7 +2,6 @@ import type { NextFunction, Request, Response } from 'express';
 import AuthError from '../errors/AuthError.js';
 import jwt from 'jsonwebtoken';
 import { env } from '../../../shared/config/env.js';
-import { unless } from 'express-unless';
 
 declare global {
     namespace Express {
@@ -28,7 +27,5 @@ const authMiddleware = (req: Request, res: Response, next: NextFunction) => {
 
     next();
 };
-
-authMiddleware.unless = unless;
 
 export default authMiddleware;
