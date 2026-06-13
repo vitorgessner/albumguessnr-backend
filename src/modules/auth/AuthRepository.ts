@@ -8,6 +8,13 @@ class AuthRepository {
                 email: true,
                 password: true,
             },
+            include: {
+                lastfmIntegration: {
+                    include: {
+                        userAlbumFamiliarities: true,
+                    },
+                },
+            },
         });
     };
 

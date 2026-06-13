@@ -29,6 +29,12 @@ class GuessController {
         res.status(200).json({ timesGuessed: response?.timesGuessed });
     };
 
+    getLastTenPlayers = async (req: Request, res: Response) => {
+        const players = await this.guessService.getLastTenPlayers();
+
+        res.status(200).json({ status: 'success', message: 'Last ten players to guess', players });
+    };
+
     makeGuessAttempt = async (req: Request, res: Response) => {
         const userId = req.userId;
         if (!userId) throw new AuthError(401, 'Unauthorized');

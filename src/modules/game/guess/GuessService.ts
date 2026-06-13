@@ -15,6 +15,19 @@ class GuessService {
         return await this.guessRepo.getTimesGuessed(userId, albumId);
     };
 
+    getLastTenPlayers = async () => {
+        const players = await this.guessRepo.getLastTenPlayers();
+
+        const formattedScore = players.map((p) => {
+            return {
+                ...p,
+                totalScore: Math.round(p.totalScore / 100),
+            };
+        });
+
+        return formattedScore;
+    };
+
     doesAlbumExists = async (albumId: string) => {
         const album = await this.albumRepo.get(albumId);
 

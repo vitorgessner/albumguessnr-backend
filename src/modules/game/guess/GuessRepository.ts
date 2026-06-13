@@ -18,6 +18,28 @@ class GuessRepository {
         });
     };
 
+    getLastTenPlayers = async () => {
+        return await prisma.guessAttempt.findMany({
+            distinct: 'userId',
+            orderBy: {
+                date: 'desc',
+            },
+            take: 8,
+            include: {
+                user: {
+                    select: {
+                        profile: {
+                            select: {
+                                avatar_url: true,
+                                username: true,
+                            },
+                        },
+                    },
+                },
+            },
+        });
+    };
+
     upsertUserAlbumStats = async (
         userId: string,
         albumId: string,

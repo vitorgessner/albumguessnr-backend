@@ -13,7 +13,7 @@ import {
 const authRoutes = (controller: AuthController) => {
     const router = Router();
 
-    // router.get('/users', (req: Request, res: Response) => controller.getAllUsers(req, res));
+    router.get('/users', (req: Request, res: Response) => controller.getAllUsers(req, res));
 
     // router.get('/users/profiles', (req: Request, res: Response) =>
     //     controller.getAllUsersWithProfile(req, res)
