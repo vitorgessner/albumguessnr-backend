@@ -53,6 +53,7 @@ model UserStats {
 model Profile {
   id         String   @id @default(uuid())
   username   String   @unique
+  displayUsername String @default("")
   bio        String   @default("")
   avatar_url String
   updatedAt  DateTime @updatedAt
@@ -77,6 +78,7 @@ model RefreshToken {
 model LastFmIntegration {
   id                     String                 @id @default(uuid())
   lastfmUsername         String                 @unique
+  lastfmDisplayUsername  String                 @default("")
   lastSyncedAt           DateTime
   lastPageSynced         Int                    @default(1)
   users                  User[]

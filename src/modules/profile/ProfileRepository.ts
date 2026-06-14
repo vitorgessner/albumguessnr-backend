@@ -42,13 +42,20 @@ class ProfileRepository {
         });
     };
 
-    edit = async (id: string, username: string, bio: string, avatar_url: string) => {
+    edit = async (
+        id: string,
+        username: string,
+        displayUsername: string,
+        bio: string,
+        avatar_url: string
+    ) => {
         return await prisma.profile.update({
             where: {
                 id,
             },
             data: {
                 username,
+                displayUsername,
                 bio,
                 avatar_url,
             },

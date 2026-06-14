@@ -40,7 +40,13 @@ class ProfileService {
         const trimmedUsername = username.trim();
 
         if (!file) {
-            await this.profileRepo.edit(profile.id, trimmedUsername, bio, defaultAvatar);
+            await this.profileRepo.edit(
+                profile.id,
+                trimmedUsername.toLocaleLowerCase(),
+                trimmedUsername,
+                bio,
+                defaultAvatar
+            );
             return { publicUrl: defaultAvatar };
         }
 
@@ -54,7 +60,13 @@ class ProfileService {
         const data = await this.uploadToStorage(newFilePath, file);
         const url = await this.getImageUrl(newFilePath);
 
-        await this.profileRepo.edit(profile.id, trimmedUsername, bio, url);
+        await this.profileRepo.edit(
+            profile.id,
+            trimmedUsername.toLocaleLowerCase(),
+            trimmedUsername,
+            bio,
+            url
+        );
 
         return { path: data.path, publicUrl: url };
     };

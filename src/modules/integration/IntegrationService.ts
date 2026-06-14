@@ -28,7 +28,11 @@ class IntegrationService {
 
         await this.lastFmUserExists(trimmedUsername);
 
-        await this.integrationRepo.connectLastfmUser(trimmedUsername, userId);
+        await this.integrationRepo.connectLastfmUser(
+            trimmedUsername.toLocaleLowerCase(),
+            trimmedUsername,
+            userId
+        );
 
         return { status: 'success', message: 'User connected' };
     };
@@ -42,11 +46,19 @@ class IntegrationService {
         const { albums, nextPage } = await this.fetchTopAlbumsFromLastfm(lastfmUser);
 
         const normalizedAlbums = await this.normalizeAlbumsTitlesAndArtists(albums);
-        let count = 1;
 
         for (const album of normalizedAlbums) {
             const childLogger = this.instantiateChildLogger(userId, album);
-            childLogger.info('Fetching album ' + count++);
+            if (!album.cover_url || album.cover_url === '') {
+                await this.saveFailedAlbumSync(
+                    album,
+                    userId,
+                    'LASTFM',
+                    childLogger,
+                    'Album returned no cover_url'
+                );
+                continue;
+            }
 
             const albumInfo = await this.fetchAlbumInfoFromLastfm(album, childLogger, userId);
             const musicBrainzAlbum = await this.fetchAlbumFromMusicBrainz(
@@ -124,12 +136,6 @@ class IntegrationService {
         logger: winston.Logger,
         err: unknown
     ) => {
-        logger.error(
-            new IntegrationError(500, 'Failed to fetch albums tracks', {
-                cause: sanitizeError(err),
-            })
-        );
-
         try {
             await this.integrationRepo.saveFailedSync({
                 albumName: album.name,
@@ -194,6 +200,13 @@ class IntegrationService {
 
             if (!info || !info.tracks || !info.tracks.track) {
                 logger.warn(new IntegrationError(404, 'Album returned no tracks'));
+                await this.saveFailedAlbumSync(
+                    album,
+                    userId,
+                    'LASTFM',
+                    logger,
+                    'Album returned no tracks'
+                );
             }
 
             return info;
@@ -219,13 +232,21 @@ class IntegrationService {
                 album.normalizedArtist
             );
 
-            if (!musicBrainzAlbum)
+            if (!musicBrainzAlbum) {
                 logger.warn(
                     new IntegrationError(
                         404,
                         'Album not found on MusicBrainz (impact year and tags)'
                     )
                 );
+                await this.saveFailedAlbumSync(
+                    album,
+                    userId,
+                    'MUSICBRAINZ',
+                    logger,
+                    'Album not found on MusicBrainz (impact year and tags)'
+                );
+            }
 
             return musicBrainzAlbum;
         } catch (err) {

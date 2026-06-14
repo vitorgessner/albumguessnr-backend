@@ -24,6 +24,7 @@ class FriendsRepository {
                         profile: {
                             select: {
                                 username: true,
+                                displayUsername: true,
                                 avatar_url: true,
                             },
                         },
@@ -90,6 +91,7 @@ class FriendsRepository {
                     select: {
                         avatar_url: true,
                         username: true,
+                        displayUsername: true,
                     },
                 },
             },
@@ -103,6 +105,7 @@ class FriendsRepository {
                     select: {
                         avatar_url: true,
                         username: true,
+                        displayUsername: true,
                     },
                 },
             },
@@ -134,6 +137,7 @@ class FriendsRepository {
                         profile: {
                             select: {
                                 username: true,
+                                displayUsername: true,
                             },
                         },
                     },
@@ -143,6 +147,7 @@ class FriendsRepository {
                         profile: {
                             select: {
                                 username: true,
+                                displayUsername: true,
                             },
                         },
                     },
@@ -161,6 +166,7 @@ class FriendsRepository {
                         profile: {
                             select: {
                                 username: true,
+                                displayUsername: true,
                             },
                         },
                     },
@@ -170,6 +176,7 @@ class FriendsRepository {
                         profile: {
                             select: {
                                 username: true,
+                                displayUsername: true,
                             },
                         },
                     },

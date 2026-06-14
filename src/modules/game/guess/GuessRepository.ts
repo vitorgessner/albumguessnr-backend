@@ -24,7 +24,7 @@ class GuessRepository {
             orderBy: {
                 date: 'desc',
             },
-            take: 8,
+            take: 10,
             include: {
                 user: {
                     select: {

@@ -74,7 +74,11 @@ class IntegrationRepository {
         });
     };
 
-    connectLastfmUser = async (lastfmUsername: string, userId: string) => {
+    connectLastfmUser = async (
+        lastfmUsername: string,
+        lastfmDisplayUsername: string,
+        userId: string
+    ) => {
         return await prisma.$transaction([
             prisma.user.update({
                 where: {
@@ -89,6 +93,7 @@ class IntegrationRepository {
                     lastfmUsername,
                 },
                 update: {
+                    lastfmDisplayUsername,
                     users: {
                         connect: {
                             id: userId,
@@ -97,6 +102,7 @@ class IntegrationRepository {
                 },
                 create: {
                     lastfmUsername,
+                    lastfmDisplayUsername,
                     lastPageSynced: 0,
                     lastSyncedAt: new Date(),
                     users: {

@@ -90,13 +90,15 @@ class AuthRepository {
     };
 
     create = async (user: UserCreateInput, default_avatar: string) => {
+        const username = user.email.split('@')[0]! + Math.round(Math.random() * 100000000);
         return await prisma.user.create({
             data: {
                 email: user.email,
                 password: user.password,
                 profile: {
                     create: {
-                        username: user.email.split('@')[0]! + Math.round(Math.random() * 100000000),
+                        username: username,
+                        displayUsername: username,
                         avatar_url: default_avatar,
                         bio: '',
                     },

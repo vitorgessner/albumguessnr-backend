@@ -7,6 +7,7 @@ export type Categories = 'TRACKLIST' | CategoriesWithoutTracks;
 type PossibleReturns = {
     userId: string;
     username: string;
+    displayUsername: string;
     category: CategoriesWithoutTracks;
     accuracy: bigint;
     rows: bigint;
@@ -33,7 +34,8 @@ class LeaderboardsRepository {
             GROUP BY "userId"
         )
 
-        SELECT t."userId", "username", "avatar_url", "totalScore", COUNT(*) OVER() AS "rows" 
+        SELECT t."userId", "username", "displayUsername", "avatar_url", "totalScore", 
+        COUNT(*) OVER() AS "rows" 
         FROM "SumOfEachBestScoreByAlbum" AS t
         JOIN "Profile" AS p
         ON t."userId" = p."userId"
@@ -63,7 +65,8 @@ class LeaderboardsRepository {
             GROUP BY "userId", "gameMode"
         )
 
-        SELECT c."userId", "username", "avatar_url", "totalScore", COUNT(*) OVER() AS "rows" 
+        SELECT c."userId", "username", "displayUsername" "avatar_url", "totalScore", 
+        COUNT(*) OVER() AS "rows" 
         FROM "SumOfEachBestScoreByCategory" AS c
         JOIN "Profile" AS p
         ON c."userId" = p."userId"
@@ -104,7 +107,7 @@ class LeaderboardsRepository {
                 GROUP BY g."userId", gc."category"
             )
 
-            SELECT au."userId", p."username", "avatar_url", au."category", 
+            SELECT au."userId", p."username", p."displayUsername", "avatar_url", au."category", 
             "rightGuessedCount" * 10000 / "totalCount" AS "accuracy", COUNT(au.*) AS "rows"
             FROM "accuracyByUser" AS au
             JOIN "correctlyGuessedTimes" AS cg 
@@ -113,8 +116,8 @@ class LeaderboardsRepository {
             ON au."userId" = p."userId"
             JOIN "UserStats" as us
             ON us."userId" = au."userId"
-            GROUP BY au."userId", p."username", "avatar_url", au."category", "accuracy", 
-            "totalScore"
+            GROUP BY au."userId", p."username", p."displayUsername", "avatar_url", au."category", 
+            "accuracy", "totalScore"
             ORDER BY "accuracy" DESC, us."totalScore" DESC
             LIMIT 50 OFFSET ${(page ?? 0) * 50}
         `;
@@ -149,7 +152,7 @@ class LeaderboardsRepository {
                 GROUP BY g."userId"
             )
 
-            SELECT tg."userId", p."username", "avatar_url",
+            SELECT tg."userId", p."username", p."displayUsername", "avatar_url",
             "rightGuessedCount" * 10000 / "totalCount" AS "accuracy", COUNT(tg.*) AS "rows"
             FROM "totalGuessedTimes" AS tg
             JOIN "correctlyGuessedTimes" AS cg 
@@ -158,7 +161,8 @@ class LeaderboardsRepository {
             ON tg."userId" = p."userId"
             JOIN "UserStats" AS us
             ON us."userId" = tg."userId"
-            GROUP BY tg."userId", p."username", "avatar_url", "accuracy", "totalScore"
+            GROUP BY tg."userId", p."username", p."displayUsername", "avatar_url", "accuracy", 
+            "totalScore"
             ORDER BY "accuracy" DESC, "totalScore" DESC
             LIMIT 50 OFFSET ${(page ?? 0) * 50}
         `;
