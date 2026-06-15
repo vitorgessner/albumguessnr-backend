@@ -12,6 +12,7 @@ import ProfileRepository from '../profile/ProfileRepository.js';
 import winston from 'winston';
 import { ILastFmUser } from './types/ILastFmUser.js';
 import { sanitizeError } from '../../shared/utils/sanitizeCause.js';
+import { sleep } from '../../shared/utils/sleep.js';
 
 class IntegrationService {
     constructor(
@@ -67,7 +68,7 @@ class IntegrationService {
                 userId
             );
 
-            const year = musicBrainzAlbum?.['first-release-date'].split('-')[0];
+            const year = musicBrainzAlbum?.['first-release-date']?.split('-')[0];
             const tags = musicBrainzAlbum?.tags ?? albumInfo?.tags?.tag ?? [];
 
             const normalizedArtists = (await this.normalizeArtists(musicBrainzAlbum)) ?? [
@@ -227,6 +228,7 @@ class IntegrationService {
         userId: string
     ) => {
         try {
+            await sleep(1000);
             const musicBrainzAlbum = await this.findAlbumFromMusicBrainz(
                 album.normalizedName,
                 album.normalizedArtist
@@ -330,7 +332,11 @@ class IntegrationService {
             };
         });
 
-        return normalizedTracks;
+        const uniqueTracks = normalizedTracks.filter(
+            (t, i, arr) => arr.findIndex((n) => n.normalizedName === t.normalizedName) === i
+        );
+
+        return uniqueTracks;
     };
 
     private normalizeAlbumsTitlesAndArtists = async (albums: Array<IUserAlbum>) => {
