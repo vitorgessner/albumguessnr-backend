@@ -47,6 +47,10 @@ import { logger } from './config/logger/logger.js';
 import { supabase } from './config/supabase.js';
 import { health } from './shared/utils/health.js';
 import { optionalAuth } from './modules/auth/middlewares/optionalAuth.js';
+import { logRoutes } from './modules/userLogs/logRoutes.js';
+import { LogController } from './modules/userLogs/LogController.js';
+import { LogRepository } from './modules/userLogs/LogRepository.js';
+import { LogService } from './modules/userLogs/LogService.js';
 
 export const getApp = (): Application => {
     const app = express();
@@ -119,6 +123,10 @@ export const getApp = (): Application => {
     const leaderboardsService = new LeaderboardsService(leaderboardsRepo);
     const leaderboardsController = new LeaderboardsController(leaderboardsService);
 
+    const logRepo = new LogRepository();
+    const logService = new LogService(logRepo);
+    const logController = new LogController(logService);
+
     app.use((req, res, next) => {
         res.set('Cache-Control', 'no-store');
         next();
@@ -142,6 +150,8 @@ export const getApp = (): Application => {
     app.use('/leaderboards', optionalAuth, leaderboardsRoutes(leaderboardsController));
 
     app.use('/stats', optionalAuth, statsRoutes(statsController));
+
+    app.use('/userLog', logRoutes(logController));
 
     app.use(globalErrorMiddleware);
 

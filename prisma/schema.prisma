@@ -30,6 +30,7 @@ model User {
   sentRequests        UserFriends[]       @relation("sentRequests")
   receivedRequests    UserFriends[]       @relation("receivedRequests")
   failedAlbumsSync    FailedAlbumsSync[]
+  albumDataErrorLog   UserAlbumDataErrorsLogs[]
 }
 
 model UserStats {
@@ -251,11 +252,12 @@ model FailedAlbumsSync {
   userId String
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   albumName String
+  albumId String @default("")
   mbid String?
   artist String
   normalizedAlbum String
   cause Json
-  status SyncStatus
+  status ErrorStatus @default(PENDING)
   apiError PossibleApis
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -263,7 +265,23 @@ model FailedAlbumsSync {
   @@unique([albumName, artist, apiError])
 }
 
-enum SyncStatus {
+model UserAlbumDataErrorsLogs {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  albumName String
+  albumId String
+  mbid String?
+  artist String
+  normalizedAlbum String
+  fieldsWithErrors String
+  description String
+  status ErrorStatus @default(PENDING)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum ErrorStatus {
   PENDING
   RESOLVED
 }
@@ -271,4 +289,5 @@ enum SyncStatus {
 enum PossibleApis {
   LASTFM
   MUSICBRAINZ
+  SERVER
 }
