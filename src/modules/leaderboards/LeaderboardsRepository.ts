@@ -65,7 +65,7 @@ class LeaderboardsRepository {
             GROUP BY "userId", "gameMode"
         )
 
-        SELECT c."userId", "username", "displayUsername" "avatar_url", "totalScore", 
+        SELECT c."userId", "username", "displayUsername", "avatar_url", "totalScore", 
         COUNT(*) OVER() AS "rows" 
         FROM "SumOfEachBestScoreByCategory" AS c
         JOIN "Profile" AS p
