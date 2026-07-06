@@ -19,6 +19,10 @@ const authRoutes = (controller: AuthController) => {
         controller.verifyUser(req, res)
     );
 
+    router.get('/login', (req: Request, res: Response) => controller.spotify(req, res));
+
+    router.get('/callback', (req: Request, res: Response) => controller.callback(req, res));
+
     router.post(
         '/login',
         setLimiter(3, 10),

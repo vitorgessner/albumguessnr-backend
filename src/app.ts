@@ -62,7 +62,7 @@ export const getApp = (): Application => {
     app.disable('x-powered-by');
     app.use(
         cors({
-            origin: env.FRONTEND_URL,
+            origin: [env.FRONTEND_URL, 'https://accounts.spotify.com/authorize'],
             credentials: true,
         })
     );

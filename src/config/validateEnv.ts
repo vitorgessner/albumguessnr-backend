@@ -15,16 +15,20 @@ const Env = z.object({
     NODE_ENV: z.string().min(3),
     LOG_LEVEL: z.string().min(4),
     DEFAULT_AVATAR: z.string().startsWith('https://'),
+    SPOTIFY_CLIENT_ID: z.string(),
+    SPOTIFY_CLIENT_SECRET: z.string(),
 });
 
 const Dev = Env.extend({
-    FRONTEND_URL: z.string().startsWith('http://localhost:5173'),
-    BASE_URL: z.string().startsWith('http://localhost:3000'),
+    FRONTEND_URL: z.string().startsWith('http://127.0.0.1:5173'),
+    BASE_URL: z.string().startsWith('http://127.0.0.1:3000'),
+    SPOTIFY_OAUTH_REDIRECT_URL: z.string().startsWith('http://127.0.0.1:3000'),
 });
 
 const Prod = Env.extend({
     FRONTEND_URL: z.string().startsWith('https://'),
     BASE_URL: z.string().startsWith('https://'),
+    SPOTIFY_OAUTH_REDIRECT_URL: z.string().startsWith('https://'),
 });
 
 const validateEnv = (mode: string | undefined) => {

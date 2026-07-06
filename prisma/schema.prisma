@@ -16,10 +16,11 @@ model User {
   id                  String              @id @default(uuid())
   email               String              @unique
   emailVerified       Boolean             @default(false)
-  password            String
+  password            String?
   createdAt           DateTime            @default(now())
   userStats           UserStats?
   profile             Profile?
+  accounts            Account[]
   verificationToken   VerificationToken[]
   refreshToken        RefreshToken[]
   lastfmIntegrationId String?
@@ -62,6 +63,19 @@ model Profile {
   user       User     @relation(fields: [userId], references: [id])
 }
 
+model Account {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider String
+  providerAccountId String
+  accessToken String? @db.Text
+  refreshToken String? @db.Text
+  expiresAt DateTime?
+  
+  @@unique([provider, providerAccountId])
+}
+
 model VerificationToken {
   token          String   @id
   expirationTime DateTime
@@ -74,6 +88,7 @@ model RefreshToken {
   expirationTime DateTime
   userId         String
   user           User     @relation(fields: [userId], references: [id])
+
 }
 
 model LastFmIntegration {

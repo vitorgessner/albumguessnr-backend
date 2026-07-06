@@ -3,6 +3,12 @@ import AuthService from './AuthService.js';
 import COOKIE_OPTIONS from './utils/COOKIE_OPTIONS.js';
 import AuthError from './errors/AuthError.js';
 import type IntegrationService from '../integration/IntegrationService.js';
+import { generateRandomString } from './utils/generateRandomString.js';
+import QueryString from 'qs';
+import { env } from '../../app.js';
+import axios from '../../config/axios.js';
+import { SpotifyCallbackInterface } from './types/spotifyCallback.js';
+import { SpotifyUserData } from './types/SpotifyUserData.js';
 
 class AuthController {
     private authService: AuthService;
@@ -54,6 +60,86 @@ class AuthController {
             .json({ status: 'success', message: 'Authorization refreshed' });
     };
 
+    spotify = async (req: Request, res: Response) => {
+        const state = generateRandomString(16);
+        const scope = 'user-read-email user-library-read user-top-read';
+
+        res.redirect(
+            'https://accounts.spotify.com/authorize?' +
+                QueryString.stringify({
+                    response_type: 'code',
+                    client_id: env.SPOTIFY_CLIENT_ID,
+                    scope,
+                    redirect_uri: env.SPOTIFY_OAUTH_REDIRECT_URL,
+                    state,
+                })
+        );
+    };
+
+    callback = async (req: Request, res: Response) => {
+        const code = req.query.code || null;
+        const state = req.query.state || null;
+
+        if (state === null) {
+            return res.redirect(
+                '/' +
+                    QueryString.stringify({
+                        error: 'state_mismatch',
+                    })
+            );
+        }
+
+        const { data } = await axios.post<SpotifyCallbackInterface>(
+            'https://accounts.spotify.com/api/token',
+            {
+                code,
+                redirect_uri: env.SPOTIFY_OAUTH_REDIRECT_URL,
+                grant_type: 'authorization_code',
+            },
+            {
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    Authorization:
+                        'Basic ' +
+                        Buffer.from(
+                            env.SPOTIFY_CLIENT_ID + ':' + env.SPOTIFY_CLIENT_SECRET
+                        ).toString('base64'),
+                },
+            }
+        );
+
+        const { access_token, refresh_token, expires_in } = data;
+
+        const { data: account } = await axios.get<SpotifyUserData>(
+            'https://api.spotify.com/v1/me',
+            {
+                headers: {
+                    Authorization: 'Bearer ' + access_token,
+                },
+            }
+        );
+
+        const { user } = await this.authService.register(account.email);
+
+        const newAccount = {
+            provider: 'SPOTIFY',
+            providerAccountId: account.account_id,
+            access_token,
+            refresh_token,
+            expires_in,
+            userId: user.id,
+        };
+        await this.authService.createAccount(newAccount);
+
+        const { token, refresh } = this.authService.generateTokens(user.id);
+
+        return res
+            .status(200)
+            .cookie('token', token, COOKIE_OPTIONS(1000 * 60 * 65))
+            .cookie('refresh', refresh, COOKIE_OPTIONS(1000 * 60 * 60 * 24 * 7))
+            .redirect(env.FRONTEND_URL + `/profile/${user.profile?.username}/edit`);
+    };
+
     login = async (req: Request, res: Response) => {
         const { email, password } = req.body;
         const { token, refresh, username } = await this.authService.login(email, password);
@@ -85,9 +171,12 @@ class AuthController {
 
     verifyUser = async (req: Request, res: Response) => {
         const { userVerificationToken } = req.params;
-        const { username, token, refresh, id } = await this.authService.verifyEmail(
-            userVerificationToken as string
-        );
+        if (!userVerificationToken || typeof userVerificationToken !== 'string') {
+            throw new AuthError(500, 'Invalid verification token format');
+        }
+
+        const { username, token, refresh, id } =
+            await this.authService.verifyEmail(userVerificationToken);
 
         await this.integrationService.connectLastfmUser(undefined, id);
 

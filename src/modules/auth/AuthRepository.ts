@@ -1,5 +1,6 @@
 import { prisma } from '../../config/prisma.js';
 import type { UserCreateInput } from '../../generated/prisma/models.js';
+import { AccountCreateInputWithUser } from './types/user.js';
 
 class AuthRepository {
     findAll = async () => {
@@ -94,7 +95,8 @@ class AuthRepository {
         return await prisma.user.create({
             data: {
                 email: user.email,
-                password: user.password,
+                password: user.password ?? null,
+                emailVerified: user.emailVerified ?? false,
                 profile: {
                     create: {
                         username: username,
@@ -106,6 +108,37 @@ class AuthRepository {
                 userStats: {
                     create: {},
                 },
+            },
+            include: {
+                profile: {
+                    select: {
+                        username: true,
+                    },
+                },
+            },
+        });
+    };
+
+    getAccount = async (provider: string, providerAccountId: string) => {
+        return await prisma.account.findUnique({
+            where: {
+                provider_providerAccountId: {
+                    provider,
+                    providerAccountId,
+                },
+            },
+        });
+    };
+
+    createAccount = async (account: AccountCreateInputWithUser) => {
+        return await prisma.account.create({
+            data: {
+                provider: account.provider,
+                providerAccountId: account.providerAccountId,
+                accessToken: account.accessToken ?? null,
+                refreshToken: account.refreshToken ?? null,
+                expiresAt: account.expiresAt ?? new Date(),
+                userId: account.userId,
             },
         });
     };

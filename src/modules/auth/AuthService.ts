@@ -7,7 +7,7 @@ import { resend } from './utils/transporter.js';
 import AuthError from './errors/AuthError.js';
 import type { UserCreateInput } from '../../generated/prisma/models.js';
 import { env } from '../../shared/config/env.js';
-import type { IUserWithUsername } from './types/user.js';
+import type { AccountCreateInputWithUser, IUserWithUsername } from './types/user.js';
 import ProfileRepository from '../profile/ProfileRepository.js';
 import winston from 'winston';
 import { sanitizeError } from '../../shared/utils/sanitizeCause.js';
@@ -60,9 +60,8 @@ class AuthService {
         return { token, refresh: refresh.token, username: validUser.profile?.username };
     };
 
-    register = async (email: string, password: string) => {
+    register = async (email: string, password?: string) => {
         if (!email) throw new ValidationError(400, 'Email is required');
-        if (!password) throw new ValidationError(400, 'Password is required');
 
         const emailExists = await this.authRepo.findByEmail(email);
         const childLogger = this.instantiateChildLogger({
@@ -71,7 +70,7 @@ class AuthService {
             username: emailExists?.profile?.username,
         });
 
-        if (emailExists) {
+        if (emailExists && password) {
             this.sendMail(
                 email,
                 'Account creation attempt',
@@ -85,17 +84,40 @@ class AuthService {
                     new AuthError(500, 'Failed to send email', { cause: sanitizeError(err) })
                 )
             );
-            return { status: 'success' };
+            return { status: 'success', user: emailExists };
+        }
+
+        if (emailExists && !password) {
+            return { status: 'success', user: emailExists };
+        }
+
+        if (!password) {
+            const newUserInput = this.generateUser(email, null, true);
+            const newUser = await this.authRepo.create(newUserInput, this.default_avatar);
+            return { status: 'success', user: newUser };
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
         const newUser = this.generateUser(email, hashedPassword);
 
-        await this.authRepo.create(newUser, this.default_avatar);
+        const createdUser = await this.authRepo.create(newUser, this.default_avatar);
 
         await this.sendTokenToEmail(email);
 
-        return { status: 'success' };
+        return { status: 'success', user: createdUser };
+    };
+
+    createAccount = async (account: AccountCreateInputWithUser) => {
+        const accountData = await this.authRepo.getAccount(
+            account.provider,
+            account.providerAccountId
+        );
+        if (accountData) {
+            return { status: 'success', message: 'Logging in', account: accountData };
+        }
+
+        const newAccount = await this.authRepo.createAccount(account);
+        return { status: 'success', message: 'Account created', account: newAccount };
     };
 
     resendEmail = async (email: string) => {
@@ -245,6 +267,13 @@ class AuthService {
         return await this.authRepo.deleteRefreshToken(refreshToken.token);
     };
 
+    generateTokens = (id: string) => {
+        const refresh = this.generateToken();
+        const token = this.generateJwtToken(id);
+
+        return { token, refresh };
+    };
+
     private instantiateChildLogger = ({
         userId,
         email,
@@ -273,6 +302,8 @@ class AuthService {
     };
 
     private validatePassword = async (user: IUserWithUsername, password: string) => {
+        if (!user.password) throw new AuthError(400, 'User does not have a password');
+
         const isValid = await bcrypt.compare(password, user.password);
         if (!isValid) throw new ValidationError(404, 'Email or password incorrect');
 
@@ -298,11 +329,15 @@ class AuthService {
         });
     };
 
-    private generateUser = (email: string, hashedPassword: string) => {
+    private generateUser = (
+        email: string,
+        hashedPassword: string | null,
+        emailVerified: boolean = false
+    ) => {
         const newUser: UserCreateInput = {
             email,
             password: hashedPassword,
-            emailVerified: false,
+            emailVerified: emailVerified,
             createdAt: new Date(),
         };
         return newUser;
