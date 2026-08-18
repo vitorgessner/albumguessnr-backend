@@ -8,21 +8,16 @@ class IntegrationController {
         this.integrationService = integrationService;
     }
 
-    createOrConnectLasfmUser = async (req: Request, res: Response) => {
-        const { lastfmUsername } = req.body;
-        const userId = req.userId;
-
-        const response = await this.integrationService.connectLastfmUser(lastfmUsername, userId);
-        if (response.status === 'success') res.status(200).json({ message: response.message });
-    };
-
     getAlbums = async (req: Request, res: Response) => {
         const userId = req.userId;
         if (!userId) throw new AuthError(401, 'Unauthorized');
 
         const response = await this.integrationService.getAlbums(userId);
 
-        res.status(200).json({ status: 'success', albums: response });
+        res.status(200).json({
+            status: 'success',
+            albums: response,
+        });
     };
 }
 

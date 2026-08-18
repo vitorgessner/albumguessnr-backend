@@ -51,6 +51,15 @@ import { logRoutes } from './modules/userLogs/logRoutes.js';
 import { LogController } from './modules/userLogs/LogController.js';
 import { LogRepository } from './modules/userLogs/LogRepository.js';
 import { LogService } from './modules/userLogs/LogService.js';
+import { oAuthRoutes } from './modules/auth/oAuthRoutes.js';
+import passport from 'passport';
+import { spotifyConsumer } from './modules/integration/providers/consumers/SpotifyConsumer.js';
+import { lastfmConsumer } from './modules/integration/providers/consumers/LastfmConsumer.js';
+import { WrapperFactory } from './modules/integration/utils/WrapperFactory.js';
+import { ProviderRepository } from './modules/integration/providers/ProviderRepository.js';
+import { ProviderService } from './modules/integration/providers/ProviderService.js';
+import { ProviderController } from './modules/integration/providers/ProviderController.js';
+import providerRoutes from './modules/integration/providers/providerRoutes.js';
 
 export const getApp = (): Application => {
     const app = express();
@@ -74,6 +83,8 @@ export const getApp = (): Application => {
 
     app.use(morgan('dev'));
 
+    app.use(passport.initialize());
+
     const transactionRepo = new TransactionRepository();
     const albumRepo = new AlbumRepository();
 
@@ -90,9 +101,13 @@ export const getApp = (): Application => {
     );
     const integrationController = new IntegrationController(integrationService);
 
-    const authRepo = new AuthRepository();
-    const authService = new AuthService(authRepo, profileRepo, logger, env.DEFAULT_AVATAR);
+    const authRepo = new AuthRepository(env.DEFAULT_AVATAR);
+    const authService = new AuthService(authRepo, profileRepo, logger);
     const authController = new AuthController(authService, integrationService);
+
+    const providerRepo = new ProviderRepository();
+    const providerService = new ProviderService(providerRepo);
+    const providerController = new ProviderController(providerService, authService);
 
     const friendRepo = new FriendsRepository();
     const friendService = new FriendsService(friendRepo, profileRepo, albumRepo);
@@ -127,6 +142,13 @@ export const getApp = (): Application => {
     const logService = new LogService(logRepo);
     const logController = new LogController(logService);
 
+    const wrapperFactory = new WrapperFactory(logger, integrationService);
+
+    spotifyConsumer('sync.spotify.initial', integrationService, wrapperFactory, logger);
+    spotifyConsumer('sync.spotify.continuation', integrationService, wrapperFactory, logger);
+    lastfmConsumer('sync.lastfm.initial', integrationService, wrapperFactory, logger);
+    lastfmConsumer('sync.lastfm.continuation', integrationService, wrapperFactory, logger);
+
     app.use((req, res, next) => {
         res.set('Cache-Control', 'no-store');
         next();
@@ -135,12 +157,13 @@ export const getApp = (): Application => {
     app.get('/health', health);
 
     app.use('/', authRoutes(authController));
+    app.use('/', oAuthRoutes(authService));
 
+    app.use('/provider', authMiddleware, providerRoutes(providerController));
     app.use('/profile', optionalAuth, profileRoutes(profileController));
     app.use('/integration', authMiddleware, integrationRoutes(integrationController));
 
-    const map = new Map<string, boolean>();
-    app.use('/game', authMiddleware, syncMiddleware(integrationService, map), gameRoutes());
+    app.use('/game', authMiddleware, syncMiddleware(integrationService), gameRoutes());
     app.use('/guess', authMiddleware, guessRoutes(guessController));
 
     app.use('/friend', authMiddleware, friendsRoutes(friendController));

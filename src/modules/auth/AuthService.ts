@@ -12,20 +12,14 @@ import ProfileRepository from '../profile/ProfileRepository.js';
 import winston from 'winston';
 import { sanitizeError } from '../../shared/utils/sanitizeCause.js';
 import { buildEmailTemplate } from './utils/buildEmail.js';
+import { Profile, VerifyCallback } from 'passport-google-oauth20';
 
 class AuthService {
     constructor(
         private authRepo: AuthRepository,
         private profileRepo: ProfileRepository,
-        private logger: winston.Logger,
-        private default_avatar: string
+        private logger: winston.Logger
     ) {}
-
-    getAll = async () => {
-        const users = await this.authRepo.findAll();
-
-        return users;
-    };
 
     getAllWithProfile = async () => {
         const users = await this.authRepo.findAllWithProfile();
@@ -33,14 +27,8 @@ class AuthService {
         return users;
     };
 
-    getAllWithLastfmIntegration = async () => {
-        const users = await this.authRepo.findAllWithLastFmIntegration();
-
-        return users;
-    };
-
     me = async (id: string) => {
-        const me = await this.authRepo.findByIdWithProfileAndLastfmIntegration(id);
+        const me = await this.authRepo.findByIdWithProfileAndAccounts(id);
         if (!me || !me.userStats) return null;
 
         me.userStats.totalScore = Math.round(me.userStats.totalScore / 100);
@@ -60,17 +48,54 @@ class AuthService {
         return { token, refresh: refresh.token, username: validUser.profile?.username };
     };
 
+    oAuthLogin = async (profile: Profile, cb: VerifyCallback) => {
+        if (!profile._json.email) return cb(new AuthError(404, 'Email not found'));
+
+        const fallbackUsername =
+            profile.displayName || profile.emails?.[0]?.value.split('@')[0] || profile.id;
+        const existingUser = await this.authRepo.findByEmail(profile._json.email);
+        const isEmailVerified =
+            (existingUser?.emailVerified || profile._json.email_verified) ?? false;
+
+        const user = {
+            email: profile._json.email,
+            emailVerified: isEmailVerified,
+        };
+
+        const account = {
+            provider: 'google',
+            providerAccountId: profile.id,
+            username: profile.username || fallbackUsername,
+            displayUsername: profile.displayName || fallbackUsername,
+        };
+
+        if (existingUser && existingUser.emailVerified) {
+            const newUser = await this.authRepo.upsertUserWithAccount(user, account);
+
+            return cb(null, newUser);
+        }
+
+        if (!isEmailVerified) {
+            await this.sendTokenToEmail(profile._json.email);
+            return cb(null, false, { message: 'Email not verified' });
+        }
+
+        const newUser = await this.authRepo.upsertUserWithAccount(user, account);
+
+        return cb(null, newUser);
+    };
+
     register = async (email: string, password?: string) => {
         if (!email) throw new ValidationError(400, 'Email is required');
 
-        const emailExists = await this.authRepo.findByEmail(email);
+        const user = await this.authRepo.findByEmail(email);
         const childLogger = this.instantiateChildLogger({
-            userId: emailExists?.id,
-            email: emailExists?.email,
-            username: emailExists?.profile?.username,
+            userId: user?.id,
+            email: user?.email,
+            username: user?.profile?.username,
         });
 
-        if (emailExists && password) {
+        if (user && password) {
             this.sendMail(
                 email,
                 'Account creation attempt',
@@ -84,23 +109,23 @@ class AuthService {
                     new AuthError(500, 'Failed to send email', { cause: sanitizeError(err) })
                 )
             );
-            return { status: 'success', user: emailExists };
+            return { status: 'success', user: user };
         }
 
-        if (emailExists && !password) {
-            return { status: 'success', user: emailExists };
+        if (user && !password) {
+            return { status: 'success', user: user };
         }
 
         if (!password) {
             const newUserInput = this.generateUser(email, null, true);
-            const newUser = await this.authRepo.create(newUserInput, this.default_avatar);
+            const newUser = await this.authRepo.create(newUserInput);
             return { status: 'success', user: newUser };
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
         const newUser = this.generateUser(email, hashedPassword);
 
-        const createdUser = await this.authRepo.create(newUser, this.default_avatar);
+        const createdUser = await this.authRepo.create(newUser);
 
         await this.sendTokenToEmail(email);
 
@@ -112,28 +137,43 @@ class AuthService {
             account.provider,
             account.providerAccountId
         );
+
         if (accountData) {
             return { status: 'success', message: 'Logging in', account: accountData };
         }
 
-        const newAccount = await this.authRepo.createAccount(account);
+        const newAccount = await this.authRepo.createProvider(account);
         return { status: 'success', message: 'Account created', account: newAccount };
+    };
+
+    hasMainProvider = async (userId: string) => {
+        const mainProvider = await this.authRepo.findMainProvider(userId);
+        if (!mainProvider) return null;
+
+        const mainAccount = mainProvider.mainAccount;
+        if (!mainAccount) return null;
+
+        return mainAccount;
+    };
+
+    setMainProvider = async (userId: string, mainAccountId: string) => {
+        return await this.authRepo.setMainProvider(userId, mainAccountId);
     };
 
     resendEmail = async (email: string) => {
         if (!email) throw new ValidationError(400, 'Email is required');
 
-        const emailExists = await this.authRepo.findByEmail(email);
-        if (!emailExists) return;
+        const user = await this.authRepo.findByEmail(email);
+        if (!user) return;
 
-        if (!emailExists.emailVerified) {
+        if (!user.emailVerified) {
             return await this.sendTokenToEmail(email);
         }
 
         const childLogger = this.instantiateChildLogger({
-            userId: emailExists?.id,
-            email: emailExists?.email,
-            username: emailExists?.profile?.username,
+            userId: user?.id,
+            email: user?.email,
+            username: user?.profile?.username,
         });
 
         this.sendMail(
@@ -155,8 +195,8 @@ class AuthService {
     forgot = async (email: string) => {
         if (!email) throw new ValidationError(400, 'Email is required');
 
-        const emailExists = await this.authRepo.findByEmail(email);
-        if (!emailExists) return;
+        const user = await this.authRepo.findByEmail(email);
+        if (!user) return;
 
         await this.sendPasswordResetTokenToEmail(email);
 
@@ -220,9 +260,7 @@ class AuthService {
 
         const token = this.generateJwtToken(validUser.id);
 
-        const user = await this.authRepo.findByIdWithProfileAndLastfmIntegration(
-            verificationToken.user.id
-        );
+        const user = await this.authRepo.findByIdWithProfileAndAccounts(verificationToken.user.id);
         if (!user) throw new AuthError(404, 'user does not exists');
 
         const refreshToken = this.generateToken();

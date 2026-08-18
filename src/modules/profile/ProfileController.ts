@@ -11,10 +11,10 @@ class ProfileController {
 
     getProfile = async (req: Request, res: Response) => {
         const { username } = req.params;
-        if (!username || username.length < 1)
+        if (!username || username.length < 1 || typeof username !== 'string')
             throw new ValidationError(400, 'Username should be on query param');
 
-        const profile = await this.profileService.getProfileByUsername(username as string);
+        const profile = await this.profileService.getProfileByUsername(username);
         if (!profile)
             return res
                 .status(200)

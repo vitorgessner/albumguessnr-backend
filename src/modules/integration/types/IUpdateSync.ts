@@ -1,4 +1,9 @@
+import { SyncStatus } from '../../../generated/prisma/enums';
+
 export interface IUpdateSync {
-    lastPageSynced: number;
-    lastSyncedAt: Date;
+    syncCursor: number;
+    lastSyncedAt: Date | null;
+    syncStatus: SyncStatus;
+    syncingTimestamp: Date | null;
+    hadFailuresInChain: boolean;
 }

@@ -1,23 +1,12 @@
 import { prisma } from '../../config/prisma.js';
-import type { UserCreateInput } from '../../generated/prisma/models.js';
+import type {
+    AccountCreateWithoutUserInput,
+    UserCreateInput,
+} from '../../generated/prisma/models.js';
 import { AccountCreateInputWithUser } from './types/user.js';
 
 class AuthRepository {
-    findAll = async () => {
-        return await prisma.user.findMany({
-            omit: {
-                email: true,
-                password: true,
-            },
-            include: {
-                lastfmIntegration: {
-                    include: {
-                        userAlbumFamiliarities: true,
-                    },
-                },
-            },
-        });
-    };
+    constructor(private default_avatar: string) {}
 
     findAllWithProfile = async () => {
         return await prisma.user.findMany({
@@ -31,27 +20,12 @@ class AuthRepository {
         });
     };
 
-    findAllWithLastFmIntegration = async () => {
-        return await prisma.user.findMany({
-            include: {
-                lastfmIntegration: true,
-            },
-            omit: {
-                email: true,
-                password: true,
-            },
-        });
-    };
-
     findByEmail = async (email: string) => {
         return await prisma.user.findUnique({
             where: { email },
             include: {
-                profile: {
-                    select: {
-                        username: true,
-                    },
-                },
+                profile: true,
+                accounts: true,
             },
         });
     };
@@ -71,16 +45,16 @@ class AuthRepository {
         });
     };
 
-    findByIdWithProfileAndLastfmIntegration = async (id: string) => {
+    findByIdWithProfileAndAccounts = async (id: string) => {
         return await prisma.user.findUnique({
             where: {
                 id,
             },
             include: {
                 profile: true,
-                lastfmIntegration: true,
-                receivedRequests: true,
-                sentRequests: true,
+                accounts: true,
+                // receivedRequests: true,
+                // sentRequests: true,
                 userStats: true,
             },
             omit: {
@@ -90,7 +64,7 @@ class AuthRepository {
         });
     };
 
-    create = async (user: UserCreateInput, default_avatar: string) => {
+    create = async (user: UserCreateInput) => {
         const username = user.email.split('@')[0]! + Math.round(Math.random() * 100000000);
         return await prisma.user.create({
             data: {
@@ -101,7 +75,7 @@ class AuthRepository {
                     create: {
                         username: username,
                         displayUsername: username,
-                        avatar_url: default_avatar,
+                        avatar_url: this.default_avatar,
                         bio: '',
                     },
                 },
@@ -119,6 +93,97 @@ class AuthRepository {
         });
     };
 
+    createProvider = async (account: AccountCreateInputWithUser) => {
+        return prisma.account.create({
+            data: {
+                provider: account.provider,
+                providerAccountId: account.providerAccountId,
+                username: account.username,
+                displayUsername: account.displayUsername || '',
+                userId: account.userId,
+                accessToken: account.accessToken || null,
+                refreshToken: account.refreshToken || null,
+                expiresAt: account.expiresAt || null,
+            },
+        });
+    };
+
+    findMainProvider = async (userId: string) => {
+        return prisma.user.findUnique({
+            where: {
+                id: userId,
+            },
+            select: {
+                mainAccount: true,
+            },
+        });
+    };
+
+    setMainProvider = async (userId: string, mainAccountId: string) => {
+        return prisma.user.update({
+            where: {
+                id: userId,
+            },
+            data: {
+                mainAccountId,
+            },
+        });
+    };
+
+    upsertUserWithAccount = async (
+        user: UserCreateInput,
+        account: AccountCreateWithoutUserInput
+    ) => {
+        const username = user.email.split('@')[0]! + Math.round(Math.random() * 100000000);
+        return prisma.user.upsert({
+            where: {
+                email: user.email,
+            },
+            create: {
+                email: user.email,
+                password: user.password ?? null,
+                emailVerified: user.emailVerified ?? false,
+                profile: {
+                    create: {
+                        username: username,
+                        displayUsername: username,
+                        avatar_url: this.default_avatar,
+                        bio: '',
+                    },
+                },
+                accounts: {
+                    create: {
+                        ...account,
+                        username: account.username ?? username,
+                        displayUsername: account.username ?? username,
+                    },
+                },
+                userStats: {
+                    create: {},
+                },
+            },
+            update: {
+                accounts: {
+                    connectOrCreate: {
+                        where: {
+                            provider_providerAccountId: {
+                                provider: account.provider,
+                                providerAccountId: account.providerAccountId,
+                            },
+                        },
+                        create: {
+                            ...account,
+                        },
+                    },
+                },
+            },
+            include: {
+                accounts: true,
+                profile: true,
+            },
+        });
+    };
+
     getAccount = async (provider: string, providerAccountId: string) => {
         return await prisma.account.findUnique({
             where: {
@@ -126,19 +191,6 @@ class AuthRepository {
                     provider,
                     providerAccountId,
                 },
-            },
-        });
-    };
-
-    createAccount = async (account: AccountCreateInputWithUser) => {
-        return await prisma.account.create({
-            data: {
-                provider: account.provider,
-                providerAccountId: account.providerAccountId,
-                accessToken: account.accessToken ?? null,
-                refreshToken: account.refreshToken ?? null,
-                expiresAt: account.expiresAt ?? new Date(),
-                userId: account.userId,
             },
         });
     };

@@ -1,18 +1,18 @@
 import IntegrationRepository from './IntegrationRepository.js';
 import type AlbumRepository from '../album/AlbumRepository.js';
-import AuthError from '../auth/errors/AuthError.js';
-import ValidationError from '../../shared/errors/ValidationError.js';
 import IntegrationError from './errors/IntegrationError.js';
-import axios from '../../config/axios.js';
-import { normalizeAlbumName, normalizeArtistName, normalizeTrackName } from './utils/normalize.js';
-import type { IUserAlbum, IUserAlbumWithInfo } from './types/IUserAlbum.js';
-import type { IAlbumInfo, IMBAlbum, IMBAlbumResponse } from './types/IAlbumInfo.js';
-import type { INormalizedArtist, INormalizedTrack } from './types/normalizedTypes.js';
 import ProfileRepository from '../profile/ProfileRepository.js';
 import winston from 'winston';
-import { ILastFmUser } from './types/ILastFmUser.js';
 import { sanitizeError } from '../../shared/utils/sanitizeCause.js';
-import { sleep } from '../../shared/utils/sleep.js';
+import { INormalizedAlbum, ISavedAlbum } from '../album/types/album.js';
+import { IProviderConnector } from './types/IProviderConnector.js';
+import { PossibleApis } from '../../generated/prisma/enums.js';
+import AuthError from '../auth/errors/AuthError.js';
+
+const apiMap: Record<string, PossibleApis> = {
+    spotify: 'SPOTIFY',
+    lastfm: 'LASTFM',
+};
 
 class IntegrationService {
     constructor(
@@ -22,127 +22,221 @@ class IntegrationService {
         private logger: winston.Logger
     ) {}
 
-    connectLastfmUser = async (lastfmUsername: string = 'FishingDonut', userId?: string) => {
-        if (!userId) throw new AuthError(401, 'Unauthorized');
+    findAlbumByTitleAndArtist = async (title: string, artist: string) => {
+        const album = await this.albumRepo.getByTitleAndArtist(title, artist);
 
-        const trimmedUsername = lastfmUsername.trim();
+        return album;
+    };
 
-        await this.lastFmUserExists(trimmedUsername);
+    findMainProvider = async (userId: string) => {
+        const provider = await this.integrationRepo.findMainProvider(userId);
+        if (!provider) throw new AuthError(404, 'A provider was not found');
+        if (!provider.mainAccount) throw new AuthError(404, 'A main provider was not found');
 
-        await this.integrationRepo.connectLastfmUser(
-            trimmedUsername.toLocaleLowerCase(),
-            trimmedUsername,
-            userId
+        return provider.mainAccount;
+    };
+
+    fetchUserAlbums = async (userId: string, provider: IProviderConnector) => {
+        const { provider: providerName, providerAccountId } = provider.getProfile();
+
+        const syncStats = await this.integrationRepo.getLastSyncedStats(
+            providerName,
+            providerAccountId
         );
 
-        return { status: 'success', message: 'User connected' };
-    };
-
-    fetchUserAlbums = async (
-        userId: string,
-        lastfmUsername: string | undefined,
-        cb: () => void
-    ) => {
-        const lastfmUser = await this.getLastFmUser(lastfmUsername);
-        const { albums, nextPage } = await this.fetchTopAlbumsFromLastfm(lastfmUser);
-
-        const normalizedAlbums = await this.normalizeAlbumsTitlesAndArtists(albums);
-
-        for (const album of normalizedAlbums) {
-            const childLogger = this.instantiateChildLogger(userId, album);
-            if (!album.cover_url || album.cover_url === '') {
-                await this.saveFailedAlbumSync(
-                    album,
-                    userId,
-                    'LASTFM',
-                    childLogger,
-                    'Album returned no cover_url'
-                );
-                continue;
-            }
-
-            const albumInfo = await this.fetchAlbumInfoFromLastfm(album, childLogger, userId);
-            const musicBrainzAlbum = await this.fetchAlbumFromMusicBrainz(
-                album,
-                childLogger,
-                userId
-            );
-
-            const year = musicBrainzAlbum?.['first-release-date']?.split('-')[0];
-            const tags = musicBrainzAlbum?.tags ?? albumInfo?.tags?.tag ?? [];
-
-            const normalizedArtists = (await this.normalizeArtists(musicBrainzAlbum)) ?? [
-                {
-                    mbid: album.artist?.mbid,
-                    name: album.artist?.name,
-                    normalizedName: album.normalizedArtist,
-                },
-            ];
-
-            const normalizedTracks = await this.normalizeTracks(albumInfo);
-
-            await this.createAndSyncNewAlbum(
-                lastfmUser.id,
-                album,
-                year,
-                tags,
-                normalizedArtists,
-                normalizedTracks,
-                childLogger,
-                userId
-            );
+        if (syncStats?.syncStatus === 'SYNCING') {
+            this.logger.warn('Already syncing');
+            return false;
         }
 
-        await this.integrationRepo.updateLastSynced(lastfmUser.lastfmUsername.trim(), {
-            lastPageSynced: nextPage,
-            lastSyncedAt: new Date(Date.now()),
-        });
-        cb();
-    };
+        const isNewChain = !syncStats?.syncingTimestamp;
+        const currentCursor = isNewChain ? provider.getInitialCursor() : syncStats.syncCursor;
+        const hadFailuresBeforeThisPage = isNewChain
+            ? false
+            : (syncStats.hadFailuresInChain ?? false);
 
-    getLastSyncedStats = async (lastfmUsername: string) => {
-        const stats = await this.integrationRepo.getLasSyncedStats(lastfmUsername.trim());
-        if (!stats) return null;
+        console.log('starting syncing on cursor: ' + currentCursor);
 
-        return stats;
-    };
+        if (isNewChain) {
+            await this.integrationRepo.updateLastSynced(providerName, providerAccountId, {
+                lastSyncedAt: new Date(Date.now()),
+                syncCursor: provider.getInitialCursor(),
+                syncStatus: 'SYNCING',
+                syncingTimestamp: new Date(Date.now()),
+                hadFailuresInChain: false,
+            });
+        }
 
-    getLastfmUserByUserId = async (id: string) => {
-        const lastfmUser = await this.profileRepo.findByUserId(id);
-        if (!lastfmUser) return null;
+        const { albums, syncCursor, hasNextPage } = await provider.fetchAlbums(currentCursor);
 
-        return lastfmUser;
+        const fullfilledAlbums = albums
+            .filter((album) => album.status === 'to create')
+            .map((album) => album.album);
+
+        const rejectedAlbums = albums.filter((album) => album.status === 'failed');
+
+        await Promise.all(
+            rejectedAlbums.map(async (album) => {
+                await this.saveFailedAlbumSync(
+                    album.rawAlbum,
+                    userId,
+                    providerName,
+                    this.logger,
+                    album.error
+                );
+            })
+        );
+
+        await Promise.all(
+            fullfilledAlbums.map(async (album) => {
+                const childLogger = this.instantiateChildLogger(userId, album);
+
+                const failedAlbumData = {
+                    name: album.name,
+                    artist: album.artists.map((artist) => artist.normalizedName).join(', '),
+                    mbid: album.mbid,
+                    normalizedAlbum: album.normalizedName,
+                };
+
+                if (!album.tracks || album.tracks.length <= 0) {
+                    await this.saveFailedAlbumSync(
+                        failedAlbumData,
+                        userId,
+                        providerName,
+                        childLogger,
+                        'Album returned no tracks'
+                    );
+                }
+
+                if (!album.genres || album.genres.length <= 0) {
+                    await this.saveFailedAlbumSync(
+                        failedAlbumData,
+                        userId,
+                        providerName,
+                        childLogger,
+                        'Album returned no genres'
+                    );
+                }
+
+                if (!album.year) {
+                    await this.saveFailedAlbumSync(
+                        failedAlbumData,
+                        userId,
+                        providerName,
+                        childLogger,
+                        'Album returned no year'
+                    );
+                }
+
+                console.log('syncing: ' + album.normalizedName + ' - ' + album.normalizedArtist);
+                await this.createAndSyncNewAlbum(album, childLogger, userId, providerName);
+            })
+        );
+
+        // for (const album of fullfilledAlbums) {
+
+        // }
+
+        if (hasNextPage) {
+            await this.integrationRepo.updateLastSynced(providerName, providerAccountId, {
+                syncCursor,
+                hadFailuresInChain: hadFailuresBeforeThisPage || rejectedAlbums.length > 0,
+            });
+        }
+
+        if (!hasNextPage) {
+            await this.integrationRepo.updateLastSynced(providerName, providerAccountId, {
+                lastSyncedAt: new Date(Date.now()),
+                syncCursor: provider.getInitialCursor(),
+                syncStatus:
+                    hadFailuresBeforeThisPage || rejectedAlbums.length > 0
+                        ? 'SUCCEEDWITHFAILURE'
+                        : 'SUCCESS',
+                syncingTimestamp: null,
+            });
+        }
+        return hasNextPage;
     };
 
     getAlbums = async (id: string) => {
-        const lastfmUser = await this.profileRepo.findByUserId(id);
-        if (!lastfmUser) throw new IntegrationError(404, 'Lastfm user not found');
+        const user = await this.profileRepo.findByUserId(id);
+        if (!user) throw new IntegrationError(404, 'User not found');
 
-        const lastfmIntegrationId = lastfmUser.user.lastfmIntegration?.id;
-        if (!lastfmIntegrationId) throw new IntegrationError(404, 'Lastfm integration not found');
+        console.log(user);
 
-        const userAlbumsQtd = await this.integrationRepo.countUserAlbums(lastfmIntegrationId);
+        const userAlbumsQtd = await this.integrationRepo.countUserAlbums(user.userId);
 
         const rand = userAlbumsQtd < 50 ? 0 : Math.floor(Math.random() * (userAlbumsQtd - 50));
 
-        const albums = await this.integrationRepo.findAlbums(lastfmIntegrationId, rand);
+        const albums = await this.integrationRepo.findAlbums(user.userId, rand);
 
         return albums;
     };
 
-    private saveFailedAlbumSync = async (
-        album: IUserAlbumWithInfo,
+    editTokens = async (
+        provider: string,
+        providerAccountId: string,
+        tokens: { accessToken: string; refreshToken: string; expiresAt: Date }
+    ) => {
+        return this.integrationRepo.editTokens(provider, providerAccountId, tokens);
+    };
+
+    syncAlbum = async (
         userId: string,
-        apiError: 'LASTFM' | 'MUSICBRAINZ',
+        album: { details: ISavedAlbum; playcount: number | null; familiarityScore: number },
+        logger: winston.Logger,
+        provider: string
+    ) => {
+        try {
+            return await this.integrationRepo.syncAlbum(userId, {
+                id: album.details.id,
+                playcount: album.playcount ? Number(album.playcount) : null,
+                lastTimeListened: null,
+                tracksListened: null,
+                familiarityScore: album.familiarityScore,
+            });
+        } catch (err) {
+            logger.error(
+                new IntegrationError(500, 'Failed to sync album', {
+                    cause: sanitizeError(err),
+                })
+            );
+            await this.saveFailedAlbumSync(
+                {
+                    name: album.details.name,
+                    mbid: album.details.mbid,
+                    artist: album.details.normalizedArtist,
+                    // eslint-disable-next-line max-len
+                    normalizedAlbum: `${album.details.normalizedName} - ${album.details.normalizedArtist}`,
+                },
+                userId,
+                provider,
+                logger,
+                err
+            );
+            return undefined;
+        }
+    };
+
+    private saveFailedAlbumSync = async (
+        album: {
+            name: string;
+            mbid: string | null;
+            artist: string;
+            normalizedAlbum: string;
+        },
+        userId: string,
+        apiError: string,
         logger: winston.Logger,
         err: unknown
     ) => {
+        logger.error(new IntegrationError(500, 'Failed album sync'));
         try {
             await this.integrationRepo.saveFailedSync({
                 albumName: album.name,
-                apiError,
-                artist: album.artist.name,
-                normalizedAlbum: album.normalizedName + ' ' + album.normalizedArtist,
+                apiError: apiMap[apiError] ?? 'SERVER',
+                artist: album.artist,
+                normalizedAlbum: album.normalizedAlbum,
                 status: 'PENDING',
                 mbid: album.mbid,
                 cause: sanitizeError(err),
@@ -161,131 +255,33 @@ class IntegrationService {
         }
     };
 
-    private instantiateChildLogger = (userId: string, album: IUserAlbumWithInfo) => {
+    private instantiateChildLogger = (userId: string, album: INormalizedAlbum) => {
         const childLogger = this.logger.child({
             requestId: userId,
             album: album.name,
             mbid: album.mbid,
-            artist: album.artist?.name,
+            artist: album.artists.map((artist) => artist.normalizedName).join(', '),
             normalized: album.normalizedName + ', ' + album.normalizedArtist,
         });
 
         return childLogger;
     };
 
-    private getLastFmUser = async (lastfmUsername: string | undefined) => {
-        if (!lastfmUsername) {
-            throw new ValidationError(400, 'LastFm username not specified');
-        }
-
-        const lastfmUser = await this.integrationRepo.findLastfmUserByUsername(lastfmUsername);
-        if (!lastfmUser) {
-            throw new IntegrationError(404, 'Lastfm User not found');
-        }
-
-        return lastfmUser;
-    };
-
-    private fetchAlbumInfoFromLastfm = async (
-        album: IUserAlbumWithInfo,
-        logger: winston.Logger,
-        userId: string
-    ) => {
-        try {
-            const info = album.mbid
-                ? ((await this.findAlbumFromLastfmByMbid(album.mbid.trim())) ?? null)
-                : ((await this.findAlbumFromLastfmByData(
-                      album.normalizedName,
-                      album.normalizedArtist
-                  )) ?? null);
-
-            if (!info || !info.tracks || !info.tracks.track) {
-                logger.warn(new IntegrationError(404, 'Album returned no tracks'));
-                await this.saveFailedAlbumSync(
-                    album,
-                    userId,
-                    'LASTFM',
-                    logger,
-                    'Album returned no tracks'
-                );
-            }
-
-            return info;
-        } catch (err) {
-            logger.error(
-                new IntegrationError(500, 'Failed to fetch albums tracks', {
-                    cause: sanitizeError(err),
-                })
-            );
-            await this.saveFailedAlbumSync(album, userId, 'LASTFM', logger, err);
-            return undefined;
-        }
-    };
-
-    private fetchAlbumFromMusicBrainz = async (
-        album: IUserAlbumWithInfo,
-        logger: winston.Logger,
-        userId: string
-    ) => {
-        try {
-            await sleep(1000);
-            const musicBrainzAlbum = await this.findAlbumFromMusicBrainz(
-                album.normalizedName,
-                album.normalizedArtist
-            );
-
-            if (!musicBrainzAlbum) {
-                logger.warn(
-                    new IntegrationError(
-                        404,
-                        'Album not found on MusicBrainz (impact year and tags)'
-                    )
-                );
-                await this.saveFailedAlbumSync(
-                    album,
-                    userId,
-                    'MUSICBRAINZ',
-                    logger,
-                    'Album not found on MusicBrainz (impact year and tags)'
-                );
-            }
-
-            return musicBrainzAlbum;
-        } catch (err) {
-            logger.error(
-                new IntegrationError(500, 'Failed to fetch album on MusicBrainz', {
-                    cause: sanitizeError(err),
-                })
-            );
-            await this.saveFailedAlbumSync(album, userId, 'MUSICBRAINZ', logger, err);
-            return undefined;
-        }
-    };
-
     private createAndSyncNewAlbum = async (
-        lastfmUserId: string,
-        album: IUserAlbumWithInfo,
-        year: string | undefined,
-        tags: Array<{ name: string }> | undefined,
-        normalizedArtists: Array<INormalizedArtist> | null,
-        normalizedTracks: Array<INormalizedTrack> | INormalizedTrack,
+        album: INormalizedAlbum,
         logger: winston.Logger,
-        userId: string
+        userId: string,
+        provider: string
     ) => {
         try {
-            const newAlbum = await this.createNewAlbum(
-                album,
-                year,
-                tags,
-                normalizedArtists,
-                normalizedTracks
-            );
+            const newAlbum = await this.createNewAlbum(album);
 
-            await this.integrationRepo.syncAlbum(lastfmUserId, {
+            await this.integrationRepo.syncAlbum(userId, {
                 id: newAlbum.id,
-                playcount: Number(album.playcount),
+                playcount: album.playcount ? Number(album.playcount) : null,
                 lastTimeListened: null,
                 tracksListened: null,
+                familiarityScore: album.familiarityScore,
             });
         } catch (err) {
             logger.error(
@@ -293,154 +289,33 @@ class IntegrationService {
                     cause: sanitizeError(err),
                 })
             );
-            await this.saveFailedAlbumSync(album, userId, 'LASTFM', logger, err);
+            await this.saveFailedAlbumSync(
+                {
+                    name: album.name,
+                    mbid: album.mbid,
+                    artist: album.normalizedArtist,
+                    normalizedAlbum: `${album.normalizedName} - ${album.normalizedArtist}`,
+                },
+                userId,
+                provider,
+                logger,
+                err
+            );
             return undefined;
         }
     };
 
-    private normalizeArtists = async (album: IMBAlbum | undefined) => {
-        if (!album) return null;
-
-        const normalizedArtists = album['artist-credit'].map((artist) => {
-            return {
-                mbid: artist.artist.id,
-                name: artist.name,
-                normalizedName: normalizeArtistName(artist.name),
-            };
-        });
-
-        return normalizedArtists;
-    };
-
-    private normalizeTracks = async (album: IAlbumInfo | undefined) => {
-        if (!album || !album.tracks || !album.tracks.track) return [];
-
-        if (!Array.isArray(album.tracks.track)) {
-            const track = album.tracks.track;
-            return {
-                ...track,
-                name: track.name,
-                normalizedName: normalizeTrackName(track.name),
-            };
-        }
-
-        const normalizedTracks = album.tracks.track.map((t) => {
-            return {
-                ...t,
-                name: t.name,
-                normalizedName: normalizeTrackName(t.name),
-            };
-        });
-
-        const uniqueTracks = normalizedTracks.filter(
-            (t, i, arr) => arr.findIndex((n) => n.normalizedName === t.normalizedName) === i
-        );
-
-        return uniqueTracks;
-    };
-
-    private normalizeAlbumsTitlesAndArtists = async (albums: Array<IUserAlbum>) => {
-        const normalizedArtists = albums.map((album) => {
-            return {
-                ...album,
-                artist: {
-                    ...album.artist,
-                    normalizedName: normalizeArtistName(album.artist.name),
-                },
-                normalizedArtist: normalizeArtistName(album.artist.name),
-            };
-        });
-
-        const normalizedAlbums = normalizedArtists.map((album) => {
-            const cover_url = album.image[album.image.length - 1]?.['#text'] ?? '';
-            return { ...album, cover_url, normalizedName: normalizeAlbumName(album.name) };
-        });
-
-        return normalizedAlbums;
-    };
-
-    private fetchTopAlbumsFromLastfm = async (lastFmUser: ILastFmUser) => {
-        const trimmedUsername = lastFmUser.lastfmUsername.trim();
-        const stats = await this.getLastSyncedStats(trimmedUsername);
-        const nextPage = (stats?.lastPageSynced ?? 0) + 1;
-        const response = await axios.get('', {
-            params: {
-                method: 'user.gettopalbums',
-                user: trimmedUsername,
-                page: nextPage,
-            },
-        });
-
-        const albums: Array<IUserAlbum> = response.data.topalbums.album;
-        if (!albums) throw new IntegrationError(404, 'No albums found');
-
-        return { albums, nextPage };
-    };
-
-    private findAlbumFromLastfmByMbid = async (mbid: string) => {
-        const trimmedMbid = mbid.trim();
-        const response = await axios.get('', {
-            params: {
-                method: 'album.getinfo',
-                mbid: trimmedMbid,
-            },
-        });
-
-        const info: IAlbumInfo = response.data.album;
-        return info;
-    };
-
-    private findAlbumFromLastfmByData = async (album: string, artist: string) => {
-        const trimmedAlbum = album.trim();
-        const trimmedArtist = artist.trim();
-        const response = await axios.get('', {
-            params: {
-                method: 'album.getinfo',
-                album: trimmedAlbum,
-                artist: trimmedArtist,
-            },
-        });
-
-        const info: IAlbumInfo = response.data.album;
-        return info;
-    };
-
-    private findAlbumFromMusicBrainz = async (album: string, artist: string) => {
-        const trimmedAlbum = album.trim();
-        const trimmedArtist = artist.trim();
-        const response = await axios.get<IMBAlbumResponse>('', {
-            baseURL: 'https://musicbrainz.org/ws/2/release-group',
-            params: {
-                query: `album:${trimmedAlbum} AND 
-                        artist:${trimmedArtist} AND 
-                        (primarytype:album OR primarytype:ep)`,
-                format: null,
-                api_key: null,
-            },
-        });
-
-        return response.data['release-groups'][0];
-    };
-
-    private createNewAlbum = async (
-        album: IUserAlbumWithInfo,
-        year: string | undefined,
-        tags: Array<{ name: string }> | undefined,
-        normalizedArtists: Array<INormalizedArtist> | null,
-        normalizedTracks: Array<INormalizedTrack> | INormalizedTrack
-    ) => {
-        const formattedTags = tags ?? [];
-        const formattedArtists = normalizedArtists ?? [];
-        const formattedTracks = Array.isArray(normalizedTracks)
-            ? normalizedTracks
-            : [normalizedTracks];
+    private createNewAlbum = async (album: INormalizedAlbum) => {
+        const formattedTags = album.genres ?? [];
+        const formattedArtists = album.artists ?? [];
+        const formattedTracks = album.tracks ?? [];
         const newAlbum = await this.albumRepo.create(
             {
                 mbid: album.mbid === '' ? null : album.mbid,
                 name: album.name,
                 normalizedName: album.normalizedName,
                 normalizedArtist: album.normalizedArtist,
-                year: year ?? null,
+                year: album.year ?? null,
                 cover_url: album.cover_url,
             },
             [...formattedTags],
@@ -449,18 +324,6 @@ class IntegrationService {
         );
 
         return newAlbum;
-    };
-
-    private lastFmUserExists = async (lastfmUsername: string) => {
-        const trimmedUsername = lastfmUsername.trim();
-        const response = await axios.get('', {
-            params: {
-                method: 'user.getinfo',
-                user: trimmedUsername,
-            },
-        });
-
-        return response.data.user;
     };
 }
 

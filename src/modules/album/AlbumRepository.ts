@@ -23,6 +23,17 @@ class AlbumRepository {
         });
     };
 
+    getByTitleAndArtist = async (title: string, artist: string) => {
+        return await prisma.album.findUnique({
+            where: {
+                normalizedName_normalizedArtist: {
+                    normalizedName: title,
+                    normalizedArtist: artist,
+                },
+            },
+        });
+    };
+
     getTracksLength = async (albumId: string) => {
         return await prisma.track.aggregate({
             where: {
@@ -40,6 +51,12 @@ class AlbumRepository {
         artists: Array<ArtistCreateInputWithoutMbid>,
         tracks: Array<TrackCreateWithoutAlbumInput>
     ) => {
+        const tracksMap = new Map<string, TrackCreateWithoutAlbumInput>();
+        tracks.forEach((track) => tracksMap.set(track.normalizedName, track));
+
+        const uniqueTracks: Array<TrackCreateWithoutAlbumInput> = [];
+        tracksMap.forEach((track) => uniqueTracks.push(track));
+
         return await prisma.album.upsert({
             where: {
                 normalizedName_normalizedArtist: {
@@ -79,7 +96,7 @@ class AlbumRepository {
                     })),
                 },
                 tracks: {
-                    create: tracks.map((t) => ({
+                    create: uniqueTracks.map((t) => ({
                         name: t.name,
                         normalizedName: t.normalizedName,
                     })),
@@ -90,23 +107,7 @@ class AlbumRepository {
                 artists: { include: { artist: true } },
                 tracks: { include: { album: true } },
             },
-            update: {
-                mbid: data.mbid,
-                name: data.name,
-                normalizedName: data.normalizedName,
-                normalizedArtist: data.normalizedArtist,
-                year: data.year ?? null,
-                cover_url: data.cover_url,
-                tracks: {
-                    createMany: {
-                        data: tracks.map((t) => ({
-                            name: t.name,
-                            normalizedName: t.normalizedName,
-                        })),
-                        skipDuplicates: true,
-                    },
-                },
-            },
+            update: {},
         });
     };
 }

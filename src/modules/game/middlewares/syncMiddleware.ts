@@ -1,37 +1,49 @@
 import type { NextFunction, Request, Response } from 'express';
-import IntegrationError from '../../integration/errors/IntegrationError.js';
 import type IntegrationService from '../../integration/IntegrationService.js';
 import AuthError from '../../auth/errors/AuthError.js';
 import { logger } from '../../../config/logger/logger.js';
+import { getRabbitChannel } from '../../../config/rabbitmq.js';
 
-const syncMiddleware = (integrationService: IntegrationService, map: Map<string, boolean>) => {
+const syncMiddleware = (integrationService: IntegrationService) => {
+    const channel = getRabbitChannel();
+
+    channel.then((res) =>
+        res.on('error', (err) => {
+            logger.error('RabbitMQ internal channel error: ', err.message);
+        })
+    );
     return async (req: Request, res: Response, next: NextFunction) => {
-        const userId = req.userId;
-        if (!userId) throw new AuthError(401, 'Unauthorized');
+        try {
+            const userId = req.userId;
+            if (!userId) throw new AuthError(401, 'Unauthorized');
 
-        const lastfmUsername = await integrationService
-            .getLastfmUserByUserId(userId)
-            .then((response) => response?.user.lastfmIntegration?.lastfmUsername);
-        if (!lastfmUsername) throw new IntegrationError(404, 'Lastfm username not found');
+            const mainProvider = await integrationService.findMainProvider(userId);
 
-        const stats = await integrationService.getLastSyncedStats(lastfmUsername);
-        const lastSyncedAt = stats?.lastSyncedAt.getTime() ?? Date.now();
+            const exchange = 'syncing_providers';
+            const message = Buffer.from(
+                JSON.stringify({
+                    userId,
+                    providerAccountId: mainProvider.providerAccountId,
+                })
+            );
 
-        if (
-            stats?.lastPageSynced !== 0 &&
-            (map.get(userId) || Date.now() - lastSyncedAt < 1000 * 60 * 60 * 24)
-        ) {
-            logger.info('Skipping albums syncing', { requestId: req.userId });
+            await channel.then((res) => res.assertExchange(exchange, 'direct', { durable: true }));
+
+            const published = await channel.then((res) =>
+                res.publish(exchange, `sync.${mainProvider.provider}.initial`, message)
+            );
+
+            if (!published) {
+                logger.warn('channel buffer is full, message queued locally');
+            } else {
+                logger.info(` [x] Sent sync.${mainProvider.provider}.initial`);
+            }
+
             return next();
+        } catch (err) {
+            logger.error('syncMiddleware catch error: ', err);
+            return next(err);
         }
-
-        logger.info('Albums sync started', { requestId: req.userId });
-        map.set(userId, true);
-        integrationService
-            .fetchUserAlbums(userId, lastfmUsername, () => map.set(userId, false))
-            .catch((err) => logger.error(err, { context: 'fetchUserAlbums fire-and-forget' }));
-
-        next();
     };
 };
 
