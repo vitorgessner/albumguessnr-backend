@@ -4,10 +4,33 @@ import { IUpdateSync } from './types/IUpdateSync.js';
 import { IUserAlbumFamiliarity } from './types/IUserAlbumFamiliarity.js';
 
 class IntegrationRepository {
-    findLastfmUserByUsername = async (lastfmUsername: string) => {
-        return await prisma.lastFmIntegration.findUnique({
+    findMainProvider = async (userId: string) => {
+        return await prisma.user.findUnique({
             where: {
-                lastfmUsername,
+                id: userId,
+            },
+            select: {
+                mainAccount: true,
+            },
+        });
+    };
+
+    editTokens = async (
+        provider: string,
+        providerAccountId: string,
+        tokens: { accessToken: string; refreshToken: string; expiresAt: Date }
+    ) => {
+        return await prisma.account.update({
+            where: {
+                provider_providerAccountId: {
+                    provider,
+                    providerAccountId,
+                },
+            },
+            data: {
+                accessToken: tokens.accessToken,
+                refreshToken: tokens.refreshToken,
+                expiresAt: tokens.expiresAt,
             },
         });
     };
@@ -15,7 +38,7 @@ class IntegrationRepository {
     findAlbums = async (id: string, rand: number) => {
         return await prisma.userAlbumFamiliarity.findMany({
             where: {
-                lastFmIntegrationId: id,
+                userId: id,
             },
             include: {
                 album: {
@@ -45,93 +68,104 @@ class IntegrationRepository {
     countUserAlbums = async (id: string) => {
         return await prisma.userAlbumFamiliarity.count({
             where: {
-                lastFmIntegrationId: id,
+                userId: id,
             },
         });
     };
 
-    updateLastSynced = async (lastfmUsername: string, data: IUpdateSync) => {
-        return await prisma.lastFmIntegration.update({
+    updateLastSynced = async (provider: string, providerId: string, data: Partial<IUpdateSync>) => {
+        return await prisma.account.update({
             where: {
-                lastfmUsername,
+                provider_providerAccountId: {
+                    provider,
+                    providerAccountId: providerId,
+                },
             },
             data: {
-                lastPageSynced: data.lastPageSynced,
-                lastSyncedAt: data.lastSyncedAt,
+                ...data,
             },
         });
     };
 
-    getLasSyncedStats = async (lastfmUsername: string) => {
-        return await prisma.lastFmIntegration.findUnique({
+    getLastSyncedStats = async (provider: string, providerId: string) => {
+        return await prisma.account.findUnique({
             where: {
-                lastfmUsername,
+                provider_providerAccountId: {
+                    provider,
+                    providerAccountId: providerId,
+                },
             },
             select: {
-                lastPageSynced: true,
                 lastSyncedAt: true,
+                syncCursor: true,
+                syncingTimestamp: true,
+                syncStatus: true,
+                hadFailuresInChain: true,
             },
         });
     };
 
-    connectLastfmUser = async (
-        lastfmUsername: string,
-        lastfmDisplayUsername: string,
-        userId: string
-    ) => {
-        return await prisma.$transaction([
-            prisma.user.update({
-                where: {
-                    id: userId,
-                },
-                data: {
-                    lastfmIntegrationId: null,
-                },
-            }),
-            prisma.lastFmIntegration.upsert({
-                where: {
-                    lastfmUsername,
-                },
-                update: {
-                    lastfmDisplayUsername,
-                    users: {
-                        connect: {
-                            id: userId,
-                        },
-                    },
-                },
-                create: {
-                    lastfmUsername,
-                    lastfmDisplayUsername,
-                    lastPageSynced: 0,
-                    lastSyncedAt: new Date(),
-                    users: {
-                        connect: {
-                            id: userId,
-                        },
-                    },
-                },
-            }),
-        ]);
-    };
+    // connectLastfmUser = async (
+    //     lastfmUsername: string,
+    //     lastfmDisplayUsername: string,
+    //     userId: string
+    // ) => {
+    //     return await prisma.$transaction([
+    //         prisma.user.update({
+    //             where: {
+    //                 id: userId,
+    //             },
+    //             data: {
+    //                 lastfmIntegrationId: null,
+    //             },
+    //         }),
+    //         prisma.lastFmIntegration.upsert({
+    //             where: {
+    //                 lastfmUsername,
+    //             },
+    //             update: {
+    //                 lastfmDisplayUsername,
+    //                 users: {
+    //                     connect: {
+    //                         id: userId,
+    //                     },
+    //                 },
+    //             },
+    //             create: {
+    //                 lastfmUsername,
+    //                 lastfmDisplayUsername,
+    //                 lastPageSynced: 0,
+    //                 lastSyncedAt: new Date(),
+    //                 users: {
+    //                     connect: {
+    //                         id: userId,
+    //                     },
+    //                 },
+    //             },
+    //         }),
+    //     ]);
+    // };
 
-    syncAlbum = async (lastfmIntegrationId: string, album: IUserAlbumFamiliarity) => {
+    syncAlbum = async (userId: string, album: IUserAlbumFamiliarity) => {
         await prisma.userAlbumFamiliarity.upsert({
             where: {
-                lastFmIntegrationId_albumId: {
+                userId_albumId: {
                     albumId: album.id,
-                    lastFmIntegrationId: lastfmIntegrationId,
+                    userId,
                 },
             },
             create: {
                 timesListened: album.playcount,
                 lastTimeListened: album.lastTimeListened ?? new Date(),
                 tracksListened: album.tracksListened ?? 0,
+                familiarityScore: album.familiarityScore,
                 albumId: album.id,
-                lastFmIntegrationId: lastfmIntegrationId,
+                userId,
             },
             update: {
                 timesListened: album.playcount,
+                tracksListened: album.tracksListened ?? 0,
+                familiarityScore: album.familiarityScore,
             },
         });
     };

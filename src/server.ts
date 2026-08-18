@@ -42,7 +42,7 @@ const startServer = async () => {
     const app = await registerRoutes();
 
     initialLogger.info('STARTING server');
-    const server = app.listen(port, () => {
+    const server = app.listen(port, async () => {
         initialLogger.info(`SUCCESS server running at http://localhost:${port}`);
     });
 

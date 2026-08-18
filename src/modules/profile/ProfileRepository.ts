@@ -9,7 +9,6 @@ class ProfileRepository {
             include: {
                 user: {
                     select: {
-                        lastfmIntegration: true,
                         userStats: true,
                         createdAt: true,
                         id: true,
@@ -27,7 +26,6 @@ class ProfileRepository {
             include: {
                 user: {
                     select: {
-                        lastfmIntegration: true,
                         userStats: true,
                         createdAt: true,
                         id: true,

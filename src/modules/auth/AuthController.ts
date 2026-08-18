@@ -18,11 +18,11 @@ class AuthController {
         this.integrationService = integrationService;
     }
 
-    getAllUsers = async (req: Request, res: Response) => {
-        const users = await this.authService.getAll();
+    // getAllUsers = async (req: Request, res: Response) => {
+    //     const users = await this.authService.getAll();
 
-        res.status(200).json({ status: 'success', users });
-    };
+    //     res.status(200).json({ status: 'success', users });
+    // };
 
     getAllUsersWithProfile = async (req: Request, res: Response) => {
         const users = await this.authService.getAllWithProfile();
@@ -30,11 +30,11 @@ class AuthController {
         res.status(200).json({ status: 'success', users });
     };
 
-    getAllUsersWithLastfmIntegration = async (req: Request, res: Response) => {
-        const users = await this.authService.getAllWithLastfmIntegration();
+    // getAllUsersWithLastfmIntegration = async (req: Request, res: Response) => {
+    //     const users = await this.authService.getAllWithLastfmIntegration();
 
-        res.status(200).json({ status: 'success', users });
-    };
+    //     res.status(200).json({ status: 'success', users });
+    // };
 
     me = async (req: Request, res: Response) => {
         if (!req.userId) throw new AuthError(401, 'Unauthorized');
@@ -128,6 +128,7 @@ class AuthController {
             refresh_token,
             expires_in,
             userId: user.id,
+            username: user.profile?.username ?? '',
         };
         await this.authService.createAccount(newAccount);
 
@@ -175,10 +176,8 @@ class AuthController {
             throw new AuthError(500, 'Invalid verification token format');
         }
 
-        const { username, token, refresh, id } =
+        const { username, token, refresh } =
             await this.authService.verifyEmail(userVerificationToken);
-
-        await this.integrationService.connectLastfmUser(undefined, id);
 
         return res
             .cookie('token', token, COOKIE_OPTIONS(1000 * 60 * 65))

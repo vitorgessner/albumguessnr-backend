@@ -13,25 +13,26 @@ datasource db {
 }
 
 model User {
-  id                  String              @id @default(uuid())
-  email               String              @unique
-  emailVerified       Boolean             @default(false)
-  password            String?
-  createdAt           DateTime            @default(now())
-  userStats           UserStats?
-  profile             Profile?
-  accounts            Account[]
-  verificationToken   VerificationToken[]
-  refreshToken        RefreshToken[]
-  lastfmIntegrationId String?
-  lastfmIntegration   LastFmIntegration?  @relation(fields: [lastfmIntegrationId], references: [id])
-  userAlbumScores     UserAlbumScores[]
-  userGuessAttempts   GuessAttempt[]
-  userAlbumStats      UserAlbumStats[]
-  sentRequests        UserFriends[]       @relation("sentRequests")
-  receivedRequests    UserFriends[]       @relation("receivedRequests")
-  failedAlbumsSync    FailedAlbumsSync[]
-  albumDataErrorLog   UserAlbumDataErrorsLogs[]
+  id                   String                    @id @default(uuid())
+  email                String                    @unique
+  emailVerified        Boolean                   @default(false)
+  password             String?
+  createdAt            DateTime                  @default(now())
+  userStats            UserStats?
+  profile              Profile?
+  accounts             Account[]
+  mainAccountId        String?                   @unique
+  mainAccount          Account?                  @relation("mainAccount", fields: [mainAccountId], references: [id], onDelete: SetNull)
+  userAlbumFamiliarity UserAlbumFamiliarity[]
+  verificationToken    VerificationToken[]
+  refreshToken         RefreshToken[]
+  userAlbumScores      UserAlbumScores[]
+  userGuessAttempts    GuessAttempt[]
+  userAlbumStats       UserAlbumStats[]
+  sentRequests         UserFriends[]             @relation("sentRequests")
+  receivedRequests     UserFriends[]             @relation("receivedRequests")
+  failedAlbumsSync     FailedAlbumsSync[]
+  albumDataErrorLog    UserAlbumDataErrorsLogs[]
 }
 
 model UserStats {
@@ -53,27 +54,43 @@ model UserStats {
 }
 
 model Profile {
-  id         String   @id @default(uuid())
-  username   String   @unique
-  displayUsername String @default("")
-  bio        String   @default("")
-  avatar_url String
-  updatedAt  DateTime @updatedAt
-  userId     String   @unique
-  user       User     @relation(fields: [userId], references: [id])
+  id              String   @id @default(uuid())
+  username        String   @unique
+  displayUsername String   @default("")
+  bio             String   @default("")
+  avatar_url      String
+  updatedAt       DateTime @updatedAt
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id])
 }
 
 model Account {
-  id String @id @default(uuid())
-  userId String
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  provider String
-  providerAccountId String
-  accessToken String? @db.Text
-  refreshToken String? @db.Text
-  expiresAt DateTime?
-  
+  id                 String     @id @default(uuid())
+  userId             String
+  user               User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userMainAccount    User?      @relation("mainAccount")
+  provider           String
+  providerAccountId  String
+  accessToken        String?    @db.Text
+  refreshToken       String?    @db.Text
+  expiresAt          DateTime?
+  username           String
+  displayUsername    String     @default("")
+  lastSyncedAt       DateTime?
+  syncCursor         Int        @default(1)
+  syncStatus         SyncStatus @default(IDLE)
+  syncingTimestamp   DateTime?
+  hadFailuresInChain Boolean    @default(false)
+
   @@unique([provider, providerAccountId])
+}
+
+enum SyncStatus {
+  IDLE
+  SYNCING
+  SUCCESS
+  SUCCEEDWITHFAILURE
+  FAILED
 }
 
 model VerificationToken {
@@ -88,17 +105,6 @@ model RefreshToken {
   expirationTime DateTime
   userId         String
   user           User     @relation(fields: [userId], references: [id])
-
-}
-
-model LastFmIntegration {
-  id                     String                 @id @default(uuid())
-  lastfmUsername         String                 @unique
-  lastfmDisplayUsername  String                 @default("")
-  lastSyncedAt           DateTime
-  lastPageSynced         Int                    @default(1)
-  users                  User[]
-  userAlbumFamiliarities UserAlbumFamiliarity[]
 }
 
 model GuessAttempt {
@@ -168,16 +174,17 @@ model UserAlbumStats {
 }
 
 model UserAlbumFamiliarity {
-  timesListened       Int
-  tracksListened      Int
-  lastTimeListened    DateTime
-  albumId             String
-  album               Album             @relation(fields: [albumId], references: [id])
-  lastFmIntegrationId String
-  lastFmIntegration   LastFmIntegration @relation(fields: [lastFmIntegrationId], references: [id])
+  timesListened    Int?
+  tracksListened   Int?
+  familiarityScore Float
+  lastTimeListened DateTime
+  albumId          String
+  album            Album    @relation(fields: [albumId], references: [id])
+  userId           String
+  user             User?    @relation(fields: [userId], references: [id])
 
-  @@id([lastFmIntegrationId, albumId])
-  @@index([lastFmIntegrationId])
+  @@id([userId, albumId])
+  @@index([userId])
 }
 
 model UserFriends {
@@ -263,37 +270,37 @@ model Track {
 }
 
 model FailedAlbumsSync {
-  id String @id @default(uuid())
-  userId String
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  albumName String
-  albumId String @default("")
-  mbid String?
-  artist String
+  id              String       @id @default(uuid())
+  userId          String
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  albumName       String
+  albumId         String       @default("")
+  mbid            String?
+  artist          String
   normalizedAlbum String
-  cause Json
-  status ErrorStatus @default(PENDING)
-  apiError PossibleApis
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  cause           Json
+  status          ErrorStatus  @default(PENDING)
+  apiError        PossibleApis
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 
   @@unique([albumName, artist, apiError])
 }
 
 model UserAlbumDataErrorsLogs {
-  id String @id @default(uuid())
-  userId String
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  albumName String
-  albumId String
-  mbid String?
-  artist String
-  normalizedAlbum String
+  id               String      @id @default(uuid())
+  userId           String
+  user             User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  albumName        String
+  albumId          String
+  mbid             String?
+  artist           String
+  normalizedAlbum  String
   fieldsWithErrors String
-  description String
-  status ErrorStatus @default(PENDING)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  description      String
+  status           ErrorStatus @default(PENDING)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
 }
 
 enum ErrorStatus {
@@ -303,6 +310,7 @@ enum ErrorStatus {
 
 enum PossibleApis {
   LASTFM
+  SPOTIFY
   MUSICBRAINZ
   SERVER
 }

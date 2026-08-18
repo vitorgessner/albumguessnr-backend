@@ -1,5 +1,4 @@
 export interface IAlbumInfo {
-    artist: string;
     tags: {
         tag: [
             {
@@ -8,14 +7,6 @@ export interface IAlbumInfo {
             },
         ];
     };
-    name: string;
-    userplaycount: number;
-    image: [
-        {
-            size: string;
-            '#text': string;
-        },
-    ];
     tracks: {
         track:
             | [
@@ -46,14 +37,6 @@ export interface IAlbumInfo {
                       mbid: string;
                   };
               };
-    };
-    url: string;
-    playcount: string;
-    listeners: string;
-    wiki: {
-        published: string;
-        summary: string;
-        content: string;
     };
 }
 
