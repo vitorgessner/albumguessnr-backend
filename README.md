@@ -20,7 +20,6 @@ pelo usuário usando seu username do Last.fm, normalizar nomes de álbuns, artis
 - **Deploy**: Render
 - **Monitoramento**: Uptimerobot
 
-
 ## Arquitetura
 
 O projeto segue uma arquitetura modular por domínio:
@@ -64,7 +63,7 @@ Cada módulo possui sua própria camada de `Controller → Service → Repositor
 
 ### Game/Guess
 
-- `GuessOrchestratorServic` e `GuessController` cuidam da orquestração de registrar uma tentativa de guess para cada categoria e para o álbum num geral com o próprio módulo de **Guess**, cálculo de pontuação usando o módulo **Scoring**, incremento de userStats usando o módulo de **Stats**, 
+- `GuessOrchestratorServic` e `GuessController` cuidam da orquestração de registrar uma tentativa de guess para cada categoria e para o álbum num geral com o próprio módulo de **Guess**, cálculo de pontuação usando o módulo **Scoring**, incremento de userStats usando o módulo de **Stats**,
 
 ### Stats e Scoring
 

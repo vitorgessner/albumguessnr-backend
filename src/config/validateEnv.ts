@@ -27,7 +27,7 @@ const Dev = Env.extend({
     BASE_URL: z.string().startsWith('http://127.0.0.1:3000'),
     SPOTIFY_OAUTH_REDIRECT_URL: z.string().startsWith('http://127.0.0.1:3000'),
     GOOGLE_OAUTH_REDIRECT_URL: z.string().startsWith('http://127.0.0.1:3000'),
-    LASTFM_OAUTH_REDIRECT_URL: z.string().startsWith('http://127.0.0.1:3000'),
+    LASTFM_OAUTH_REDIRECT_URL: z.string().startsWith('https://'),
 });
 
 const Prod = Env.extend({
