@@ -3,9 +3,11 @@ import AuthError from '../errors/AuthError.js';
 import jwt from 'jsonwebtoken';
 import { env } from '../../../shared/config/env.js';
 
-declare module 'Express' {
-    interface Request {
-        userId?: string;
+declare global {
+    namespace Express {
+        interface Request {
+            userId?: string;
+        }
     }
 }
 
