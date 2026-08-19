@@ -73,7 +73,6 @@ export const oAuthRoutes = (authService: AuthService) => {
                     return done(null, {
                         key: sessionKey.key,
                         name: sessionKey.name,
-                        sub: sessionKey.subscriber,
                     });
                 } catch (err) {
                     done(err as Error);
@@ -231,7 +230,7 @@ export const oAuthRoutes = (authService: AuthService) => {
                 failureRedirect: env.FRONTEND_URL + '/auth/login',
                 failureMessage: true,
             },
-            async (err: unknown, user: { key: string; name: string; sub: string }) => {
+            async (err: unknown, user: { key: string; name: string }) => {
                 if (err || !user) return res.redirect(env.FRONTEND_URL + '/?message=Auth failed');
 
                 const userId = req.cookies.lastfm_auth_userId;
@@ -251,7 +250,7 @@ export const oAuthRoutes = (authService: AuthService) => {
                 try {
                     const response = await authService.createAccount({
                         provider: 'lastfm',
-                        providerAccountId: String(user.sub),
+                        providerAccountId: user.name,
                         userId: userId,
                         username: user.name,
                         accessToken: user.key,
