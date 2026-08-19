@@ -251,7 +251,7 @@ export const oAuthRoutes = (authService: AuthService) => {
                 try {
                     const response = await authService.createAccount({
                         provider: 'lastfm',
-                        providerAccountId: user.sub,
+                        providerAccountId: String(user.sub),
                         userId: userId,
                         username: user.name,
                         accessToken: user.key,
