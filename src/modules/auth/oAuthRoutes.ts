@@ -8,6 +8,14 @@ import COOKIE_OPTIONS from './utils/COOKIE_OPTIONS';
 import AuthService from './AuthService';
 import authMiddleware from './middlewares/authMiddleware';
 
+interface AuthenticatedUser {
+    id: string;
+    profile?: {
+        username?: string;
+        displayUsername?: string;
+    } | null;
+}
+
 export const oAuthRoutes = (authService: AuthService) => {
     const router = Router();
 
@@ -101,8 +109,8 @@ export const oAuthRoutes = (authService: AuthService) => {
                 failureMessage: true,
                 session: false,
             },
-            (err: unknown, user: Express.User, info?: { message?: string }) => {
-                if (err || !user)
+            (err: unknown, rawUser: Express.User, info?: { message?: string }) => {
+                if (err || !rawUser)
                     return res.redirect(env.FRONTEND_URL + '/auth/login?message=Auth failed');
 
                 if (info && info.message) {
@@ -113,6 +121,7 @@ export const oAuthRoutes = (authService: AuthService) => {
                 }
 
                 try {
+                    const user = rawUser as AuthenticatedUser;
                     const { token, refresh } = authService.generateTokens(user.id);
 
                     const username = user.profile?.username ?? '';
