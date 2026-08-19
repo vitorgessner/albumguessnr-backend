@@ -20,6 +20,7 @@ const Env = z.object({
     GOOGLE_CLIENT_ID: z.string(),
     GOOGLE_CLIENT_SECRET: z.string(),
     LASTFM_CLIENT_SECRET: z.string(),
+    RABBITMQ_URL: z.string(),
 });
 
 const Dev = Env.extend({

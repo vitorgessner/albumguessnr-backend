@@ -53,15 +53,15 @@ import { LogRepository } from './modules/userLogs/LogRepository.js';
 import { LogService } from './modules/userLogs/LogService.js';
 import { oAuthRoutes } from './modules/auth/oAuthRoutes.js';
 import passport from 'passport';
-import { spotifyConsumer } from './modules/integration/providers/consumers/SpotifyConsumer.js';
-import { lastfmConsumer } from './modules/integration/providers/consumers/LastfmConsumer.js';
-import { WrapperFactory } from './modules/integration/utils/WrapperFactory.js';
 import { ProviderRepository } from './modules/integration/providers/ProviderRepository.js';
 import { ProviderService } from './modules/integration/providers/ProviderService.js';
 import { ProviderController } from './modules/integration/providers/ProviderController.js';
 import providerRoutes from './modules/integration/providers/providerRoutes.js';
+import { spotifyConsumer } from './modules/integration/providers/consumers/SpotifyConsumer.js';
+import { lastfmConsumer } from './modules/integration/providers/consumers/LastfmConsumer.js';
+import { WrapperFactory } from './modules/integration/utils/WrapperFactory.js';
 
-export const getApp = (): Application => {
+export const getApp = (): { app: Application; startConsumers: () => Promise<void> } => {
     const app = express();
     app.use(
         helmet({
@@ -144,11 +144,6 @@ export const getApp = (): Application => {
 
     const wrapperFactory = new WrapperFactory(logger, integrationService);
 
-    spotifyConsumer('sync.spotify.initial', integrationService, wrapperFactory, logger);
-    spotifyConsumer('sync.spotify.continuation', integrationService, wrapperFactory, logger);
-    lastfmConsumer('sync.lastfm.initial', integrationService, wrapperFactory, logger);
-    lastfmConsumer('sync.lastfm.continuation', integrationService, wrapperFactory, logger);
-
     app.use((req, res, next) => {
         res.set('Cache-Control', 'no-store');
         next();
@@ -178,6 +173,20 @@ export const getApp = (): Application => {
 
     app.use(globalErrorMiddleware);
 
-    return app;
+    const startConsumers = async () => {
+        await Promise.all([
+            spotifyConsumer('sync.spotify.initial', integrationService, wrapperFactory, logger),
+            spotifyConsumer(
+                'sync.spotify.continuation',
+                integrationService,
+                wrapperFactory,
+                logger
+            ),
+            lastfmConsumer('sync.lastfm.initial', integrationService, wrapperFactory, logger),
+            lastfmConsumer('sync.lastfm.continuation', integrationService, wrapperFactory, logger),
+        ]);
+    };
+
+    return { app, startConsumers };
 };
 export { env };
