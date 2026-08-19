@@ -215,7 +215,8 @@ export const oAuthRoutes = (authService: AuthService) => {
     );
 
     router.get('/login/lastfm', authMiddleware, (req: Request, res, next) => {
-        passport.authenticate('lastfm')(req, res, next);
+        const state = req.userId;
+        passport.authenticate('lastfm', { state })(req, res, next);
     });
 
     router.get('/lastfm/callback', (req, res, next) => {
@@ -226,24 +227,25 @@ export const oAuthRoutes = (authService: AuthService) => {
                 failureMessage: true,
             },
             async (err: unknown, user: { key: string; name: string; sub: string }) => {
-                if (err || !user)
-                    return res.redirect(env.FRONTEND_URL + '/auth/login?message=Auth failed');
+                if (err || !user) return res.redirect(env.FRONTEND_URL + '/?message=Auth failed');
 
-                if (!req.userId) {
+                const userId = req.query.state;
+
+                if (!userId) {
                     console.error('userId not found');
-                    return res.redirect(env.FRONTEND_URL + '/auth/login?message=missing_user');
+                    return res.redirect(env.FRONTEND_URL + '/?message=missing_user');
                 }
 
-                if (typeof req.userId !== 'string') {
+                if (typeof userId !== 'string') {
                     console.error('userId is not valid');
-                    return res.redirect(env.FRONTEND_URL + '/auth/login?message=invalid_userId');
+                    return res.redirect(env.FRONTEND_URL + '/?message=invalid_userId');
                 }
 
                 try {
                     const response = await authService.createAccount({
                         provider: 'lastfm',
                         providerAccountId: user.sub,
-                        userId: req.userId,
+                        userId: userId,
                         username: user.name,
                         accessToken: user.key,
                         refreshToken: null,
@@ -251,8 +253,8 @@ export const oAuthRoutes = (authService: AuthService) => {
                         expiresAt: null,
                     });
 
-                    await authService.setMainProvider(req.userId, response.account.id);
-                    const me = await authService.me(req.userId);
+                    await authService.setMainProvider(userId, response.account.id);
+                    const me = await authService.me(userId);
 
                     return res.redirect(
                         env.FRONTEND_URL + '/profile/' + me?.profile?.displayUsername
