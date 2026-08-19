@@ -8,6 +8,10 @@ const providerRoutes = (controller: ProviderController) => {
         controller.deleteSpotify(req, res)
     );
 
+    router.delete('/lastfm', async (req: Request, res: Response) =>
+        controller.deleteLastfm(req, res)
+    );
+
     return router;
 };
 
