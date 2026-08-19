@@ -83,7 +83,8 @@ export const oAuthRoutes = (authService: AuthService) => {
         )
     );
 
-    passport.serializeUser(function (user: Express.User, cb) {
+    passport.serializeUser(function (rawUser: Express.User, cb) {
+        const user = rawUser as AuthenticatedUser;
         process.nextTick(function () {
             cb(null, {
                 id: user.id,
