@@ -215,8 +215,8 @@ export const oAuthRoutes = (authService: AuthService) => {
     );
 
     router.get('/login/lastfm', authMiddleware, (req: Request, res, next) => {
-        const state = req.userId;
-        passport.authenticate('lastfm', { state })(req, res, next);
+        res.cookie('lastfm_auth_userId', req.userId, COOKIE_OPTIONS(1000 * 60 * 15));
+        passport.authenticate('lastfm')(req, res, next);
     });
 
     router.get('/lastfm/callback', (req, res, next) => {
@@ -229,7 +229,7 @@ export const oAuthRoutes = (authService: AuthService) => {
             async (err: unknown, user: { key: string; name: string; sub: string }) => {
                 if (err || !user) return res.redirect(env.FRONTEND_URL + '/?message=Auth failed');
 
-                const userId = req.query.state;
+                const userId = req.cookies.lastfm_auth_userId;
 
                 if (!userId) {
                     console.error('userId not found');
@@ -240,6 +240,8 @@ export const oAuthRoutes = (authService: AuthService) => {
                     console.error('userId is not valid');
                     return res.redirect(env.FRONTEND_URL + '/?message=invalid_userId');
                 }
+
+                res.clearCookie('lastfm_auth_userId');
 
                 try {
                     const response = await authService.createAccount({
