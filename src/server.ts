@@ -39,7 +39,7 @@ const registerRoutes = async () => {
 
 const startServer = async () => {
     await connectWithDatabase();
-    const app = await registerRoutes();
+    const { app, startConsumers } = await registerRoutes();
 
     initialLogger.info('STARTING server');
     const server = app.listen(port, async () => {
@@ -52,6 +52,10 @@ const startServer = async () => {
         );
         process.exit(1);
     });
+
+    initialLogger.info('STARTING RabbitMQ consumers');
+    await startConsumers();
+    initialLogger.info('SUCCESS RabbitMQ consumers ready');
 };
 
 startServer();
