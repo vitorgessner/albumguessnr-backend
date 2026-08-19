@@ -107,7 +107,7 @@ export const getApp = (): { app: Application; startConsumers: () => Promise<void
 
     const providerRepo = new ProviderRepository();
     const providerService = new ProviderService(providerRepo);
-    const providerController = new ProviderController(providerService, authService);
+    const providerController = new ProviderController(providerService);
 
     const friendRepo = new FriendsRepository();
     const friendService = new FriendsService(friendRepo, profileRepo, albumRepo);

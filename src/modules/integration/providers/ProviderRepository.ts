@@ -1,6 +1,17 @@
 import { prisma } from '../../../config/prisma';
 
 export class ProviderRepository {
+    findAllUserProviders = async (userId: string) => {
+        return prisma.user.findUnique({
+            where: {
+                id: userId,
+            },
+            include: {
+                accounts: true,
+            },
+        });
+    };
+
     findMainProvider = async (userId: string) => {
         return prisma.user.findUnique({
             where: {
