@@ -28,6 +28,7 @@
         "noUncheckedIndexedAccess": true,
         "exactOptionalPropertyTypes": true,
 
+        "typeRoots": ["./node_modules/@types", "./src/@types"],
         // Style Options
         // "noImplicitReturns": true,
         // "noImplicitOverride": true,

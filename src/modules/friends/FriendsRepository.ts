@@ -1,6 +1,30 @@
 import { prisma } from '../../config/prisma.js';
 import { Prisma } from '../../generated/prisma/client.js';
 
+const userFriendsInclude = {
+    receivedRequests: {
+        include: {
+            profile: {
+                select: {
+                    username: true,
+                    displayUsername: true,
+                    avatar_url: true,
+                },
+            },
+            userStats: true,
+        },
+        omit: {
+            password: true,
+            email: true,
+            emailVerified: true,
+        },
+    },
+} as const satisfies Prisma.UserFriendsInclude;
+
+export type UserFriendsWithRelations = Prisma.UserFriendsGetPayload<{
+    include: typeof userFriendsInclude;
+}>;
+
 class FriendsRepository {
     findRequest = async (sentRequestsId: string, receivedRequestsId: string) => {
         return await prisma.userFriends.findUnique({
@@ -13,7 +37,7 @@ class FriendsRepository {
         });
     };
 
-    findFriends = async (id: string) => {
+    findFriends = async (id: string): Promise<UserFriendsWithRelations[]> => {
         return await prisma.userFriends.findMany({
             where: {
                 sentRequestsId: id,
@@ -34,7 +58,6 @@ class FriendsRepository {
                         password: true,
                         email: true,
                         emailVerified: true,
-                        lastfmIntegrationId: true,
                     },
                 },
             },

@@ -114,11 +114,14 @@ export const oAuthRoutes = (authService: AuthService) => {
 
                 try {
                     const { token, refresh } = authService.generateTokens(user.id);
+
+                    const username = user.profile?.username ?? '';
+
                     return res
                         .status(200)
                         .cookie('token', token, COOKIE_OPTIONS(1000 * 60 * 65))
                         .cookie('refresh', refresh, COOKIE_OPTIONS(1000 * 60 * 60 * 24 * 7))
-                        .redirect(env.FRONTEND_URL + `/profile/${user.profile?.username}/edit`);
+                        .redirect(env.FRONTEND_URL + `/profile/${username}/edit`);
                 } catch (error) {
                     console.error('Failed to generate tokens:', error);
                     return res.redirect(env.FRONTEND_URL + '/auth/login');
