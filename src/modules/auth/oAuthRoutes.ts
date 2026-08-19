@@ -215,7 +215,12 @@ export const oAuthRoutes = (authService: AuthService) => {
     );
 
     router.get('/login/lastfm', authMiddleware, (req: Request, res, next) => {
-        res.cookie('lastfm_auth_userId', req.userId, COOKIE_OPTIONS(1000 * 60 * 15));
+        res.cookie('lastfm_auth_userId', req.userId, {
+            httpOnly: true,
+            secure: env.NODE_ENV !== 'dev',
+            sameSite: 'lax',
+            maxAge: 1000 * 60 * 15,
+        });
         passport.authenticate('lastfm')(req, res, next);
     });
 
