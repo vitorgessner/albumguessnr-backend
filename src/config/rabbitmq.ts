@@ -38,7 +38,7 @@ class RabbitMq {
     public async getConnection(): Promise<ChannelModel> {
         if (this.connection) return this.connection;
 
-        if (!this.connection) {
+        if (!this.connecting) {
             this.connecting = (async () => {
                 try {
                     initialLogger.info('STARTING connection with RabbitMQ');
@@ -74,11 +74,7 @@ class RabbitMq {
             })();
         }
 
-        if (!this.connection) {
-            throw new Error('RabbitMQ connection could not be established');
-        }
-
-        return this.connection;
+        return this.connection!;
     }
 
     public createChannel = async (): Promise<Channel> => {
