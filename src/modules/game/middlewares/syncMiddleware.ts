@@ -5,19 +5,20 @@ import { logger } from '../../../config/logger/logger.js';
 import { getRabbitChannel } from '../../../config/rabbitmq.js';
 
 const syncMiddleware = (integrationService: IntegrationService) => {
-    const channel = getRabbitChannel();
-
-    channel.then((res) =>
-        res.on('error', (err) => {
-            logger.error('RabbitMQ internal channel error: ', err.message);
-        })
-    );
     return async (req: Request, res: Response, next: NextFunction) => {
         try {
             const userId = req.userId;
             if (!userId) throw new AuthError(401, 'Unauthorized');
 
             const mainProvider = await integrationService.findMainProvider(userId);
+
+            const channel = getRabbitChannel();
+
+            channel.then((res) =>
+                res.on('error', (err) => {
+                    logger.error('RabbitMQ internal channel error: ', err.message);
+                })
+            );
 
             const exchange = 'syncing_providers';
             const message = Buffer.from(
