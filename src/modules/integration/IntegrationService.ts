@@ -133,10 +133,6 @@ class IntegrationService {
             })
         );
 
-        // for (const album of fullfilledAlbums) {
-
-        // }
-
         if (hasNextPage) {
             await this.integrationRepo.updateLastSynced(providerName, providerAccountId, {
                 syncCursor,

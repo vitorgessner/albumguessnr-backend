@@ -23,6 +23,10 @@ export class ProviderService {
         return mainAccount;
     };
 
+    setMainProvider = async (userId: string, mainAccountId: string) => {
+        return await this.providerRepo.setMainProvider(userId, mainAccountId);
+    };
+
     deleteAccount = async (provider: string, providerAccountId: string) => {
         if (!provider || !providerAccountId) {
             throw new AuthError(400, 'Provider was not provided');

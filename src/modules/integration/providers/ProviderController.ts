@@ -17,8 +17,14 @@ export class ProviderController {
         }
 
         const spotifyProvider = providers.find((account) => account.provider === 'spotify');
+        const lastfmProvider = providers.find((account) => account.provider === 'lastfm');
+
         if (!spotifyProvider) {
             throw new AuthError(404, 'User has not an spotify account connected');
+        }
+
+        if (lastfmProvider) {
+            await this.providerService.setMainProvider(id, lastfmProvider.id);
         }
 
         await this.providerService.deleteAccount(
@@ -41,8 +47,14 @@ export class ProviderController {
         }
 
         const lastfmProvider = providers.find((account) => account.provider === 'lastfm');
+        const spotifyProvider = providers.find((account) => account.provider === 'spotify');
+
         if (!lastfmProvider) {
             throw new AuthError(404, 'User has not an lastfm account connected');
+        }
+
+        if (spotifyProvider) {
+            await this.providerService.setMainProvider(id, spotifyProvider.id);
         }
 
         await this.providerService.deleteAccount(

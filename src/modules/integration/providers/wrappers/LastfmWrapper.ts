@@ -17,6 +17,9 @@ import { getApiInstances } from '../config/axiosInstances';
 import { sanitizeError } from '../../../../shared/utils/sanitizeCause';
 import { AlbumFormatResult } from '../interfaces/AlbumFormatResult';
 import IntegrationService from '../../IntegrationService';
+import { md5 } from '../../../../shared/utils/md5';
+import { env } from '../../../../app';
+import AuthError from '../../../auth/errors/AuthError';
 
 export class LastfmWrapper implements IProviderConnector {
     private lastfmAxios;
@@ -30,7 +33,6 @@ export class LastfmWrapper implements IProviderConnector {
         this.logger = logger;
         const setup = getApiInstances();
         this.lastfmAxios = setup.lastfmAxios;
-        // setup.setupLastfmInterceptor(this.getAccount, this.integrationService.editTokens);
     }
 
     getInitialCursor = (): number => 1;
@@ -71,9 +73,22 @@ export class LastfmWrapper implements IProviderConnector {
     };
 
     private fetchTopAlbums = async (syncCursor: number) => {
+        if (!this.account.accessToken) {
+            throw new AuthError(
+                401,
+                'User has not a token for Last.fm, try logging in Last.fm again'
+            );
+        }
+
+        const signature = md5(
+            `api_key${env.API_KEY}methoduser.gettopalbums${env.LASTFM_CLIENT_SECRET}`
+        );
+
         const response = await this.lastfmAxios.get<ITopAlbumsResponse>('', {
             params: {
                 method: 'user.gettopalbums',
+                api_sig: signature,
+                sk: this.account.accessToken,
                 user: this.account.username,
                 page: syncCursor,
             },
@@ -91,6 +106,11 @@ export class LastfmWrapper implements IProviderConnector {
     ): Promise<AlbumFormatResult> => {
         try {
             const childLogger = this.instantiateChildLogger(this.userId, album);
+
+            if (!album.image || !album.image[0]) {
+                childLogger.error(new IntegrationError(404, 'Cover_url not found'));
+                throw new IntegrationError(404, 'Cover_url not found');
+            }
 
             const cover_url = this.getCoverUrl(album, childLogger);
 
@@ -111,7 +131,7 @@ export class LastfmWrapper implements IProviderConnector {
                         familiarityScore: Number(album.playcount) / Number(topPlaycount),
                     },
                     childLogger,
-                    'spotify'
+                    'lastfm'
                 );
                 return { status: 'synced' };
             }
@@ -273,11 +293,25 @@ export class LastfmWrapper implements IProviderConnector {
         logger: winston.Logger
     ): Promise<INormalizedTrack[]> => {
         try {
+            if (!this.account.accessToken) {
+                throw new AuthError(
+                    401,
+                    'User has not a token for Last.fm, try logging in Last.fm again'
+                );
+            }
+
             const trimmedAlbum = name.trim();
             const trimmedArtist = artist.trim();
+
+            const signature = md5(
+                `api_key${env.API_KEY}methodalbum.getinfo${env.LASTFM_CLIENT_SECRET}`
+            );
+
             const response = await this.lastfmAxios.get('', {
                 params: {
                     method: 'album.getinfo',
+                    api_sig: signature,
+                    sk: this.account.accessToken,
                     album: trimmedAlbum,
                     artist: trimmedArtist,
                 },
@@ -323,9 +357,22 @@ export class LastfmWrapper implements IProviderConnector {
         logger: winston.Logger
     ): Promise<INormalizedTrack[]> => {
         try {
+            if (!this.account.accessToken) {
+                throw new AuthError(
+                    401,
+                    'User has not a token for Last.fm, try logging in Last.fm again'
+                );
+            }
+
+            const signature = md5(
+                `api_key${env.API_KEY}methodalbum.getinfo${env.LASTFM_CLIENT_SECRET}`
+            );
+
             const response = await this.lastfmAxios.get('', {
                 params: {
                     method: 'album.getinfo',
+                    api_sig: signature,
+                    sk: this.account.accessToken,
                     mbid,
                 },
             });

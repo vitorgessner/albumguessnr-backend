@@ -9,6 +9,7 @@ const INITIAL_DELAY_MS = 1000;
 
 class RabbitMq {
     private connection: ChannelModel | null = null;
+    private connecting: Promise<ChannelModel> | null = null;
     private retries = 0;
     constructor() {}
 
@@ -30,36 +31,47 @@ class RabbitMq {
         );
 
         await new Promise((resolve) => setTimeout(resolve, delay));
+        this.connecting = null;
         await this.getConnection();
     }
 
     public async getConnection(): Promise<ChannelModel> {
-        if (!this.connection) {
-            try {
-                initialLogger.info('STARTING connection with RabbitMQ');
-                this.connection = await amqp.connect(env.RABBITMQ_URL);
-                this.retries = 0;
-                initialLogger.info('SUCCESS RabbitMQ connected');
+        if (this.connection) return this.connection;
 
-                this.connection.on('error', (err) => {
-                    initialLogger.error('RabbitMQ connection error', {
+        if (!this.connection) {
+            this.connecting = (async () => {
+                try {
+                    initialLogger.info('STARTING connection with RabbitMQ');
+                    this.connection = await amqp.connect(env.RABBITMQ_URL);
+                    this.retries = 0;
+                    initialLogger.info('SUCCESS RabbitMQ connected');
+
+                    this.connection.on('error', (err) => {
+                        initialLogger.error('RabbitMQ connection error', {
+                            cause: sanitizeError(err),
+                        });
+                        this.connection = null;
+                        this.connecting = null;
+                        void this.reconnect();
+                    });
+
+                    this.connection.on('close', () => {
+                        initialLogger.warn('RabbitMQ connection closed unexpectedly');
+                        this.connection = null;
+                        this.connecting = null;
+                        void this.reconnect();
+                    });
+
+                    return this.connection;
+                } catch (err) {
+                    this.connecting = null;
+                    initialLogger.error('FAILED to connect with RabbitMQ', {
                         cause: sanitizeError(err),
                     });
-                    this.connection = null;
-                    void this.reconnect();
-                });
-
-                this.connection.on('close', () => {
-                    initialLogger.warn('RabbitMQ connection closed unexpectedly');
-                    this.connection = null;
-                    void this.reconnect();
-                });
-            } catch (err) {
-                initialLogger.error('FAILED to connect with RabbitMQ', {
-                    cause: sanitizeError(err),
-                });
-                await this.reconnect();
-            }
+                    await this.reconnect();
+                    return this.getConnection();
+                }
+            })();
         }
 
         if (!this.connection) {
@@ -71,7 +83,7 @@ class RabbitMq {
 
     public createChannel = async (): Promise<Channel> => {
         const connection = await this.getConnection();
-        return await connection?.createChannel();
+        return await connection.createChannel();
     };
 }
 
