@@ -33,4 +33,15 @@ export class ProviderRepository {
             },
         });
     };
+
+    setMainProvider = async (userId: string, mainAccountId: string) => {
+        return await prisma.user.update({
+            where: {
+                id: userId,
+            },
+            data: {
+                mainAccountId,
+            },
+        });
+    };
 }
