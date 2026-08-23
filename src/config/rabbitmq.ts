@@ -31,7 +31,6 @@ class RabbitMq {
         );
 
         await new Promise((resolve) => setTimeout(resolve, delay));
-        this.connecting = null;
         await this.getConnection();
     }
 
@@ -42,11 +41,12 @@ class RabbitMq {
             this.connecting = (async () => {
                 try {
                     initialLogger.info('STARTING connection with RabbitMQ');
-                    this.connection = await amqp.connect(env.RABBITMQ_URL);
+                    const connection = await amqp.connect(env.RABBITMQ_URL);
+                    this.connection = connection;
                     this.retries = 0;
                     initialLogger.info('SUCCESS RabbitMQ connected');
 
-                    this.connection.on('error', (err) => {
+                    connection.on('error', (err) => {
                         initialLogger.error('RabbitMQ connection error', {
                             cause: sanitizeError(err),
                         });
@@ -55,26 +55,26 @@ class RabbitMq {
                         void this.reconnect();
                     });
 
-                    this.connection.on('close', () => {
+                    connection.on('close', () => {
                         initialLogger.warn('RabbitMQ connection closed unexpectedly');
                         this.connection = null;
                         this.connecting = null;
                         void this.reconnect();
                     });
 
-                    return this.connection;
+                    return connection;
                 } catch (err) {
                     this.connecting = null;
+                    this.connection = null;
                     initialLogger.error('FAILED to connect with RabbitMQ', {
                         cause: sanitizeError(err),
                     });
-                    await this.reconnect();
-                    return this.getConnection();
+                    throw err;
                 }
             })();
         }
 
-        return this.connection!;
+        return this.connecting;
     }
 
     public createChannel = async (): Promise<Channel> => {
