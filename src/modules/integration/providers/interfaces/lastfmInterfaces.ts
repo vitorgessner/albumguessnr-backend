@@ -24,12 +24,17 @@ export interface ITopAlbumResponse {
 
 export interface IAlbumInfo {
     tags: {
-        tag: [
-            {
-                url: string;
-                name: string;
-            },
-        ];
+        tag:
+            | [
+                  {
+                      url: string;
+                      name: string;
+                  },
+              ]
+            | {
+                  url: string;
+                  name: string;
+              };
     };
     tracks: {
         track:

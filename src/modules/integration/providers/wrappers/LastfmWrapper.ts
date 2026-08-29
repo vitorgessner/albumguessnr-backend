@@ -81,7 +81,8 @@ export class LastfmWrapper implements IProviderConnector {
         }
 
         const signature = md5(
-            `api_key${env.API_KEY}methoduser.gettopalbums${env.LASTFM_CLIENT_SECRET}`
+            // eslint-disable-next-line max-len
+            `api_key${env.API_KEY}methoduser.gettopalbumspage${syncCursor}sk${this.account.accessToken}user${this.account.username}${env.LASTFM_CLIENT_SECRET}`
         );
 
         const response = await this.lastfmAxios.get<ITopAlbumsResponse>('', {
@@ -173,13 +174,21 @@ export class LastfmWrapper implements IProviderConnector {
                         familiarityScore: Number(album.playcount) / Number(topPlaycount),
                     },
                     childLogger,
-                    'spotify'
+                    'lastfm'
                 );
                 return { status: 'synced' };
             }
 
-            const tracks = await this.fetchAlbumTracks(album, childLogger);
-            const genres = await this.fetchAlbumTags(musicBrainzAlbum);
+            const info = album.mbid
+                ? await this.fetchInfoWithMbid(album.mbid, childLogger)
+                : await this.fetchInfoWithAlbumData(
+                      normalizeAlbumName(album.name),
+                      normalizeArtistName(album.artist.name),
+                      childLogger
+                  );
+
+            const tracks = await this.fetchAlbumTracks(info, childLogger);
+            const genres = await this.fetchAlbumTags(musicBrainzAlbum, info, childLogger);
 
             const year = musicBrainzAlbum ? this.getMusicBrainzAlbumYear(musicBrainzAlbum) : null;
 
@@ -273,25 +282,44 @@ export class LastfmWrapper implements IProviderConnector {
     };
 
     private fetchAlbumTracks = async (
-        album: ITopAlbumResponse,
+        info: IAlbumInfo | undefined,
         logger: winston.Logger
     ): Promise<INormalizedTrack[]> => {
-        if (!album.mbid || album.mbid === '') {
-            return await this.fetchInfoWithAlbumData(
-                normalizeAlbumName(album.name),
-                normalizeArtistName(album.artist.name),
-                logger
-            );
+        if (!info) {
+            return [];
         }
 
-        return await this.fetchInfoWithMbid(album.mbid, logger);
+        if (!info.tracks || !info.tracks.track) {
+            logger.warn(new IntegrationError(404, 'Album returned no tracks'));
+            return [];
+        }
+
+        if (Array.isArray(info.tracks.track) && info.tracks.track.length > 0) {
+            return info.tracks.track.map((track) => {
+                return {
+                    name: track.name,
+                    normalizedName: normalizeTrackName(track.name),
+                };
+            });
+        }
+
+        if (!Array.isArray(info.tracks.track)) {
+            return [
+                {
+                    name: info.tracks.track.name,
+                    normalizedName: normalizeTrackName(info.tracks.track.name),
+                },
+            ];
+        }
+
+        return [];
     };
 
     private fetchInfoWithAlbumData = async (
         name: string,
         artist: string,
         logger: winston.Logger
-    ): Promise<INormalizedTrack[]> => {
+    ): Promise<IAlbumInfo | undefined> => {
         try {
             if (!this.account.accessToken) {
                 throw new AuthError(
@@ -304,7 +332,8 @@ export class LastfmWrapper implements IProviderConnector {
             const trimmedArtist = artist.trim();
 
             const signature = md5(
-                `api_key${env.API_KEY}methodalbum.getinfo${env.LASTFM_CLIENT_SECRET}`
+                // eslint-disable-next-line max-len
+                `album${trimmedAlbum}api_key${env.API_KEY}artist${trimmedArtist}methodalbum.getinfosk${this.account.accessToken}${env.LASTFM_CLIENT_SECRET}`
             );
 
             const response = await this.lastfmAxios.get('', {
@@ -319,43 +348,25 @@ export class LastfmWrapper implements IProviderConnector {
 
             const info: IAlbumInfo = response.data.album;
 
-            if (!info || !info.tracks || !info.tracks.track) {
-                logger.warn(new IntegrationError(404, 'Album returned no tracks'));
+            if (!info) {
+                logger.warn(new IntegrationError(404, 'No info found on lastfm'));
             }
 
-            if (Array.isArray(info.tracks.track) && info.tracks.track.length <= 0) {
-                logger.warn(new IntegrationError(404, 'Album returned no tracks'));
-            }
-
-            if (Array.isArray(info.tracks.track)) {
-                return info.tracks.track.map((track) => {
-                    return {
-                        name: track.name,
-                        normalizedName: normalizeTagName(track.name),
-                    };
-                });
-            }
-
-            return [
-                {
-                    name: info.tracks.track.name,
-                    normalizedName: normalizeTrackName(info.tracks.track.name),
-                },
-            ];
+            return info;
         } catch (err) {
             logger.error(
                 new IntegrationError(500, 'Failed to fetch albums tracks', {
                     cause: sanitizeError(err),
                 })
             );
-            return [];
+            return undefined;
         }
     };
 
     private fetchInfoWithMbid = async (
         mbid: string,
         logger: winston.Logger
-    ): Promise<INormalizedTrack[]> => {
+    ): Promise<IAlbumInfo | undefined> => {
         try {
             if (!this.account.accessToken) {
                 throw new AuthError(
@@ -365,7 +376,8 @@ export class LastfmWrapper implements IProviderConnector {
             }
 
             const signature = md5(
-                `api_key${env.API_KEY}methodalbum.getinfo${env.LASTFM_CLIENT_SECRET}`
+                // eslint-disable-next-line max-len
+                `api_key${env.API_KEY}mbid${mbid}methodalbum.getinfosk${this.account.accessToken}${env.LASTFM_CLIENT_SECRET}`
             );
 
             const response = await this.lastfmAxios.get('', {
@@ -379,39 +391,47 @@ export class LastfmWrapper implements IProviderConnector {
 
             const info: IAlbumInfo = response.data.album;
 
-            if (Array.isArray(info.tracks.track)) {
-                return info.tracks.track.map((track) => {
-                    return {
-                        name: track.name,
-                        normalizedName: normalizeTagName(track.name),
-                    };
-                });
-            }
-
-            return [
-                {
-                    name: info.tracks.track.name,
-                    normalizedName: normalizeTrackName(info.tracks.track.name),
-                },
-            ];
+            return info;
         } catch (err) {
             logger.error(
                 new IntegrationError(500, 'Failed to fetch albums tracks', {
                     cause: sanitizeError(err),
                 })
             );
-            return [];
+            return undefined;
         }
     };
 
-    private fetchAlbumTags = async (album: IMBAlbum | undefined): Promise<INormalizedTag[]> => {
-        if (!album) return [];
+    private fetchAlbumTags = async (
+        album: IMBAlbum | undefined,
+        info: IAlbumInfo | undefined,
+        logger: winston.Logger
+    ): Promise<INormalizedTag[]> => {
+        if (!album && !info) {
+            return [];
+        }
 
-        const tags = album.tags.map((tag) => {
-            return { name: normalizeTagName(tag.name) };
-        });
+        if (album && album.tags && album.tags.length > 0) {
+            return album.tags.map((tag) => {
+                return { name: normalizeTagName(tag.name) };
+            });
+        }
 
-        return tags;
+        if (info && info.tags && info.tags.tag && Array.isArray(info.tags.tag)) {
+            return info.tags.tag.map((tag) => {
+                return { name: normalizeTagName(tag.name) };
+            });
+        }
+
+        if (info && info.tags && info.tags.tag && !Array.isArray(info.tags.tag)) {
+            return [
+                {
+                    name: normalizeTagName(info.tags.tag.name),
+                },
+            ];
+        }
+        logger.warn(new IntegrationError(404, 'Album returned no tags'));
+        return [];
     };
 
     private getMusicBrainzAlbumYear = (musicBrainzAlbum: IMBAlbum) => {

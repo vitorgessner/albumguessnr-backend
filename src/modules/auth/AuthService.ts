@@ -72,6 +72,10 @@ class AuthService {
         if (existingUser && existingUser.emailVerified) {
             const newUser = await this.authRepo.upsertUserWithAccount(user, account);
 
+            if (!newUser) {
+                return cb(new Error('Failed to login with google'));
+            }
+
             return cb(null, newUser);
         }
 
@@ -81,6 +85,9 @@ class AuthService {
         }
 
         const newUser = await this.authRepo.upsertUserWithAccount(user, account);
+        if (!newUser) {
+            return cb(new Error('Failed to login with google'));
+        }
 
         return cb(null, newUser);
     };
@@ -89,9 +96,10 @@ class AuthService {
         if (!email) throw new ValidationError(400, 'Email is required');
 
         const user = await this.authRepo.findByEmail(email);
+
         const childLogger = this.instantiateChildLogger({
             userId: user?.id,
-            email: user?.email,
+            email: user?.email ?? null,
             username: user?.profile?.username,
         });
 
@@ -119,7 +127,7 @@ class AuthService {
         if (!password) {
             const newUserInput = this.generateUser(email, null, true);
             const newUser = await this.authRepo.create(newUserInput);
-            return { status: 'success', user: newUser };
+            return { status: newUser ? 'success' : 'error', user: newUser };
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
@@ -205,13 +213,19 @@ class AuthService {
 
     editPassword = async (passwordResetToken: string, password: string) => {
         if (!passwordResetToken) throw new ValidationError(400, 'Token should be provided');
-
         const verificationToken = await this.authRepo.findByToken(passwordResetToken);
-        if (!verificationToken) throw new AuthError(404, 'Token not found');
-        if (verificationToken.expirationTime.getTime() < new Date(Date.now()).getTime())
+
+        if (!verificationToken) {
+            throw new AuthError(404, 'Token not found');
+        }
+
+        if (verificationToken.expirationTime.getTime() < new Date(Date.now()).getTime()) {
             throw new AuthError(401, 'Token expired');
-        if (!verificationToken.user.emailVerified)
-            throw new AuthError(401, 'Email is not verified');
+        }
+
+        if (!verificationToken.user.emailVerified || !verificationToken.user.email) {
+            throw new AuthError(401, 'Email is not verified or user is not logged in');
+        }
 
         const hashedPassword = await bcrypt.hash(password, 10);
         const response = await this.authRepo.editPassword(
@@ -249,9 +263,17 @@ class AuthService {
     verifyEmail = async (userVerificationToken: string) => {
         const verificationToken = await this.authRepo.findByToken(userVerificationToken);
 
-        if (!verificationToken) throw new AuthError(404, 'Token not found');
-        if (verificationToken.expirationTime.getTime() < new Date(Date.now()).getTime())
+        if (!verificationToken) {
+            throw new AuthError(404, 'Token not found');
+        }
+
+        if (verificationToken.expirationTime.getTime() < new Date(Date.now()).getTime()) {
             throw new AuthError(401, 'Token expired');
+        }
+
+        if (!verificationToken.user.email) {
+            throw new AuthError(401, 'User is not logged in');
+        }
 
         const validUser = await this.authRepo.verifyEmail(
             verificationToken.user.email,
@@ -283,6 +305,10 @@ class AuthService {
 
         if (refreshToken.expirationTime.getTime() < new Date(Date.now()).getTime()) {
             throw new AuthError(401, 'Token expired');
+        }
+
+        if (!refreshToken.user.email) {
+            throw new AuthError(401, 'User is not logged in');
         }
 
         await this.authRepo.deleteRefreshToken(refreshToken.token);
@@ -318,7 +344,7 @@ class AuthService {
         username,
     }: {
         userId?: string | undefined;
-        email?: string | undefined;
+        email?: string | null;
         username?: string | undefined;
     }) => {
         const childLogger = this.logger.child({
