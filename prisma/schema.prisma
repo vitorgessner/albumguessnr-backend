@@ -13,26 +13,29 @@ datasource db {
 }
 
 model User {
-  id                   String                    @id @default(uuid())
-  email                String                    @unique
-  emailVerified        Boolean                   @default(false)
-  password             String?
-  createdAt            DateTime                  @default(now())
-  userStats            UserStats?
-  profile              Profile?
-  accounts             Account[]
-  mainAccountId        String?                   @unique
-  mainAccount          Account?                  @relation("mainAccount", fields: [mainAccountId], references: [id], onDelete: SetNull)
-  userAlbumFamiliarity UserAlbumFamiliarity[]
-  verificationToken    VerificationToken[]
-  refreshToken         RefreshToken[]
-  userAlbumScores      UserAlbumScores[]
-  userGuessAttempts    GuessAttempt[]
-  userAlbumStats       UserAlbumStats[]
-  sentRequests         UserFriends[]             @relation("sentRequests")
-  receivedRequests     UserFriends[]             @relation("receivedRequests")
-  failedAlbumsSync     FailedAlbumsSync[]
-  albumDataErrorLog    UserAlbumDataErrorsLogs[]
+  id                              String                           @id @default(uuid())
+  email                           String?                          @unique
+  emailVerified                   Boolean                          @default(false)
+  password                        String?
+  createdAt                       DateTime                         @default(now())
+  isGuest                         Boolean                          @default(false)
+  userStats                       UserStats?
+  profile                         Profile?
+  accounts                        Account[]
+  mainAccountId                   String?                          @unique
+  mainAccount                     Account?                         @relation("mainAccount", fields: [mainAccountId], references: [id], onDelete: SetNull)
+  userAlbumFamiliarity            UserAlbumFamiliarity[]
+  verificationToken               VerificationToken[]
+  refreshToken                    RefreshToken[]
+  userAlbumScores                 UserAlbumScores[]
+  userGuessAttempts               GuessAttempt[]
+  userAlbumStats                  UserAlbumStats[]
+  sentRequests                    UserFriends[]                    @relation("sentRequests")
+  receivedRequests                UserFriends[]                    @relation("receivedRequests")
+  failedAlbumsSync                FailedAlbumsSync[]
+  albumDataErrorLog               UserAlbumDataErrorsLogs[]
+  dailyAlbumGuesses               UserDailyAlbum[]
+  userDailyAlbumOverallStatistics UserDailyAlbumOverallStatistics?
 }
 
 model UserStats {
@@ -222,8 +225,70 @@ model Album {
   guessAttempts          GuessAttempt[]
   userAlbumStats         UserAlbumStats[]
   tracks                 Track[]
+  rymRating              Decimal?
+  rymRanking             Decimal?
+  descriptors            String[]
+  dailyAlbum             DailyAlbum?
+  albumPools             AlbumPools[]
+  dailyAlbumTries        DailyAlbumTry[]
 
   @@unique([normalizedName, normalizedArtist])
+}
+
+model DailyAlbum {
+  albumId         String           @id @unique
+  album           Album            @relation(fields: [albumId], references: [id])
+  lastfmListeners String?
+  lastfmPlaycount String?
+  date            DateTime         @unique
+  userGuesses     UserDailyAlbum[]
+}
+
+model AlbumPools {
+  albumId        String    @id @unique
+  album          Album     @relation(fields: [albumId], references: [id])
+  electable      Boolean   @default(true)
+}
+
+model UserDailyAlbum {
+  id               String               @id @default(uuid())
+  userId           String
+  user             User                 @relation(fields: [userId], references: [id])
+  dailyAlbumId     String
+  dailyAlbum       DailyAlbum           @relation(fields: [dailyAlbumId], references: [albumId])
+  nthPlayerToGuess Int?
+  status           UserDailyAlbumStatus
+  userTries        DailyAlbumTry[]
+
+  @@unique([userId, dailyAlbumId])
+}
+
+enum UserDailyAlbumStatus {
+  UNFINISHED
+  FINISHED
+}
+
+model DailyAlbumTry {
+  id               String         @id @default(uuid())
+  userDailyAlbumId String
+  userDailyAlbum   UserDailyAlbum @relation(fields: [userDailyAlbumId], references: [id])
+  nthTry           Int
+  albumGuessId     String
+  albumGuess       Album          @relation(fields: [albumGuessId], references: [id])
+  timestamp        DateTime
+
+  @@unique([userDailyAlbumId, albumGuessId])
+}
+
+model UserDailyAlbumOverallStatistics {
+  userId               String @id
+  user                 User   @relation(fields: [userId], references: [id])
+  totalGuessed         Int    @default(0)
+  correctlyGuessed     Int    @default(0)
+  meanToGuess          Float    @default(0)
+  numberOfFirstGuesses Int    @default(0)
+  currentStreak        Int    @default(0)
+  maxStreak            Int    @default(0)
 }
 
 model Genre {

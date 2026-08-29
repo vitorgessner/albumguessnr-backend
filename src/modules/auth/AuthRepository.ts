@@ -53,8 +53,6 @@ class AuthRepository {
             include: {
                 profile: true,
                 accounts: true,
-                // receivedRequests: true,
-                // sentRequests: true,
                 userStats: true,
             },
             omit: {
@@ -65,6 +63,10 @@ class AuthRepository {
     };
 
     create = async (user: UserCreateInput) => {
+        if (!user.email) {
+            return null;
+        }
+
         const username = user.email.split('@')[0]! + Math.round(Math.random() * 100000000);
         return await prisma.user.create({
             data: {
@@ -134,6 +136,10 @@ class AuthRepository {
         user: UserCreateInput,
         account: AccountCreateWithoutUserInput
     ) => {
+        if (!user.email) {
+            return null;
+        }
+
         const username = user.email.split('@')[0]! + Math.round(Math.random() * 100000000);
         return prisma.user.upsert({
             where: {

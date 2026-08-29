@@ -203,7 +203,7 @@ export const oAuthRoutes = (authService: AuthService) => {
                     const me = await authService.me(userId);
 
                     return res.redirect(
-                        env.FRONTEND_URL + '/profile/' + me?.profile?.displayUsername
+                        env.FRONTEND_URL + '/profile/' + me?.profile?.displayUsername + '/edit'
                     );
                 } catch (error) {
                     console.error('Failed to create account: ', error);
@@ -263,7 +263,7 @@ export const oAuthRoutes = (authService: AuthService) => {
                     const me = await authService.me(userId);
 
                     return res.redirect(
-                        env.FRONTEND_URL + '/profile/' + me?.profile?.displayUsername
+                        env.FRONTEND_URL + '/profile/' + me?.profile?.displayUsername + '/edit'
                     );
                 } catch (error) {
                     console.error('Failed to create account: ', error);
