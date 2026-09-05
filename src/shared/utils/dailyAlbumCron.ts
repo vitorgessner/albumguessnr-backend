@@ -2,9 +2,8 @@ import axiosInstance from '../../config/axios';
 import { logger } from '../../config/logger/logger';
 import { env } from '../config/env';
 import { sleep } from './sleep';
-import cron from 'node-cron';
 
-async function runCron() {
+export async function runCron() {
     const MAX_CRON_RETRIES = 3;
     const BASE_BACKOFF_MS = 2000;
 
@@ -46,5 +45,3 @@ async function runCron() {
         }
     }
 }
-
-cron.schedule('0 7 * * *', () => runCron());
