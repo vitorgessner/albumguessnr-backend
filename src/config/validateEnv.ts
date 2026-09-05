@@ -21,6 +21,7 @@ const Env = z.object({
     GOOGLE_CLIENT_SECRET: z.string(),
     LASTFM_CLIENT_SECRET: z.string(),
     RABBITMQ_URL: z.string(),
+    CRON_API_KEY: z.string(),
 });
 
 const Dev = Env.extend({

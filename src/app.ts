@@ -46,7 +46,6 @@ import TransactionRepository from './shared/TransactionRepo.js';
 import { logger } from './config/logger/logger.js';
 import { supabase } from './config/supabase.js';
 import { health } from './shared/utils/health.js';
-import { optionalAuth } from './modules/auth/middlewares/optionalAuth.js';
 import { logRoutes } from './modules/userLogs/logRoutes.js';
 import { LogController } from './modules/userLogs/LogController.js';
 import { LogRepository } from './modules/userLogs/LogRepository.js';
@@ -60,6 +59,16 @@ import providerRoutes from './modules/integration/providers/providerRoutes.js';
 import { spotifyConsumer } from './modules/integration/providers/consumers/SpotifyConsumer.js';
 import { lastfmConsumer } from './modules/integration/providers/consumers/LastfmConsumer.js';
 import { WrapperFactory } from './modules/integration/utils/WrapperFactory.js';
+import { DailyAlbumRepository } from './modules/dailyAlbum/DailyAlbumRepository.js';
+import { DailyAlbumService } from './modules/dailyAlbum/DailyAlbumService.js';
+import { DailyAlbumController } from './modules/dailyAlbum/DailyAlbumController.js';
+import { dailyAlbumRoutes } from './modules/dailyAlbum/dailyAlbumRoutes.js';
+import { AlbumService } from './modules/album/AlbumService.js';
+import { AlbumController } from './modules/album/AlbumController.js';
+import { albumRoutes } from './modules/album/albumRoutes.js';
+// eslint-disable-next-line max-len
+import { requireFullAccountMiddleware } from './modules/auth/middlewares/requireFullAccountMiddleware.js';
+import { optionalAuth } from './modules/auth/middlewares/optionalAuth.js';
 
 export const getApp = (): { app: Application; startConsumers: () => Promise<void> } => {
     const app = express();
@@ -87,6 +96,8 @@ export const getApp = (): { app: Application; startConsumers: () => Promise<void
 
     const transactionRepo = new TransactionRepository();
     const albumRepo = new AlbumRepository();
+    const albumService = new AlbumService(albumRepo);
+    const albumController = new AlbumController(albumService);
 
     const profileRepo = new ProfileRepository();
     const profileService = new ProfileService(profileRepo, logger, supabase);
@@ -144,6 +155,19 @@ export const getApp = (): { app: Application; startConsumers: () => Promise<void
 
     const wrapperFactory = new WrapperFactory(logger, integrationService);
 
+    const dailyAlbumRepo = new DailyAlbumRepository();
+    const dailyAlbumService = new DailyAlbumService(
+        dailyAlbumRepo,
+        albumRepo,
+        integrationService,
+        logger
+    );
+    const dailyAlbumController = new DailyAlbumController(
+        dailyAlbumService,
+        profileService,
+        authService
+    );
+
     app.use((req, res, next) => {
         res.set('Cache-Control', 'no-store');
         next();
@@ -151,25 +175,55 @@ export const getApp = (): { app: Application; startConsumers: () => Promise<void
 
     app.get('/health', health);
 
-    app.use('/', authRoutes(authController));
-    app.use('/', oAuthRoutes(authService));
+    app.use('/', authRoutes(authController, authService));
+    app.use('/', optionalAuth(authService), oAuthRoutes(authService));
 
-    app.use('/provider', authMiddleware, providerRoutes(providerController));
-    app.use('/profile', optionalAuth, profileRoutes(profileController));
-    app.use('/integration', authMiddleware, integrationRoutes(integrationController));
+    app.use(
+        '/provider',
+        authMiddleware,
+        requireFullAccountMiddleware,
+        providerRoutes(providerController)
+    );
+    app.use('/profile', optionalAuth(authService), profileRoutes(profileController));
+    app.use(
+        '/integration',
+        authMiddleware,
+        requireFullAccountMiddleware,
+        integrationRoutes(integrationController)
+    );
 
-    app.use('/game', authMiddleware, syncMiddleware(integrationService), gameRoutes());
-    app.use('/guess', authMiddleware, guessRoutes(guessController));
+    app.use(
+        '/game',
+        authMiddleware,
+        requireFullAccountMiddleware,
+        syncMiddleware(integrationService),
+        gameRoutes()
+    );
+    app.use('/guess', authMiddleware, requireFullAccountMiddleware, guessRoutes(guessController));
 
-    app.use('/friend', authMiddleware, friendsRoutes(friendController));
+    app.use('/album', optionalAuth(authService), albumRoutes(albumController));
 
-    app.use('/scoring', authMiddleware, scoringRoutes(scoringController));
+    app.use(
+        '/friend',
+        authMiddleware,
+        requireFullAccountMiddleware,
+        friendsRoutes(friendController)
+    );
 
-    app.use('/leaderboards', optionalAuth, leaderboardsRoutes(leaderboardsController));
+    app.use(
+        '/scoring',
+        authMiddleware,
+        requireFullAccountMiddleware,
+        scoringRoutes(scoringController)
+    );
 
-    app.use('/stats', optionalAuth, statsRoutes(statsController));
+    app.use('/leaderboards', optionalAuth(authService), leaderboardsRoutes(leaderboardsController));
+
+    app.use('/stats', optionalAuth(authService), statsRoutes(statsController));
 
     app.use('/userLog', logRoutes(logController));
+
+    app.use('/daily', optionalAuth(authService), dailyAlbumRoutes(dailyAlbumController));
 
     app.use(globalErrorMiddleware);
 

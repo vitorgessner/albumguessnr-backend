@@ -8,6 +8,9 @@ import { INormalizedAlbum, ISavedAlbum } from '../album/types/album.js';
 import { IProviderConnector } from './types/IProviderConnector.js';
 import { PossibleApis } from '../../generated/prisma/enums.js';
 import AuthError from '../auth/errors/AuthError.js';
+import type { IAlbumInfo } from './providers/interfaces/lastfmInterfaces.js';
+import type { AxiosInstance } from 'axios';
+import { ITopAlbumResponse } from './providers/interfaces/lastfmInterfaces.js';
 
 const apiMap: Record<string, PossibleApis> = {
     spotify: 'SPOTIFY',
@@ -214,7 +217,52 @@ class IntegrationService {
         }
     };
 
-    private saveFailedAlbumSync = async (
+    fetchInfoWithAlbumData = async (
+        name: string,
+        artist: string,
+        lastfmAxios: AxiosInstance,
+        logger?: winston.Logger
+    ): Promise<IAlbumInfo | undefined> => {
+        try {
+            const trimmedAlbum = name.trim();
+            const trimmedArtist = artist.trim();
+
+            const response = await lastfmAxios.get('', {
+                params: {
+                    method: 'album.getinfo',
+                    album: trimmedAlbum,
+                    artist: trimmedArtist,
+                },
+            });
+
+            const info: IAlbumInfo = response.data.album;
+
+            if (!info) {
+                logger?.warn(new IntegrationError(404, 'No info found on lastfm'));
+            }
+
+            return info;
+        } catch (err) {
+            logger?.error(
+                new IntegrationError(500, 'Failed to fetch albums tracks', {
+                    cause: sanitizeError(err),
+                })
+            );
+            return undefined;
+        }
+    };
+
+    getCoverUrl = (album: ITopAlbumResponse | IAlbumInfo, logger?: winston.Logger): string => {
+        const cover_url = album.image[album.image.length - 1]?.['#text'];
+        if (!cover_url) {
+            logger?.error(new IntegrationError(404, 'Cover_url not found'));
+            throw new IntegrationError(404, 'Cover_url not found');
+        }
+
+        return cover_url;
+    };
+
+    saveFailedAlbumSync = async (
         album: {
             name: string;
             mbid: string | null;

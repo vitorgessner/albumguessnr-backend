@@ -4,7 +4,7 @@ const COOKIE_OPTIONS = (maxAge: number) => {
     return {
         httpOnly: true,
         secure: env.NODE_ENV !== 'dev',
-        sameSite: 'strict' as const,
+        sameSite: 'lax' as const,
         maxAge,
     };
 };

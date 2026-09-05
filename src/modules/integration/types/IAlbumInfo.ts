@@ -1,44 +1,44 @@
-export interface IAlbumInfo {
-    tags: {
-        tag: [
-            {
-                url: string;
-                name: string;
-            },
-        ];
-    };
-    tracks: {
-        track:
-            | [
-                  {
-                      duration: string;
-                      url: string;
-                      name: string;
-                      '@attr': {
-                          rank: number;
-                      };
-                      artist: {
-                          url: string;
-                          name: string;
-                          mbid: string;
-                      };
-                  },
-              ]
-            | {
-                  duration: string;
-                  url: string;
-                  name: string;
-                  '@attr': {
-                      rank: number;
-                  };
-                  artist: {
-                      url: string;
-                      name: string;
-                      mbid: string;
-                  };
-              };
-    };
-}
+// export interface IAlbumInfo {
+//     tags: {
+//         tag: [
+//             {
+//                 url: string;
+//                 name: string;
+//             },
+//         ];
+//     };
+//     tracks: {
+//         track:
+//             | [
+//                   {
+//                       duration: string;
+//                       url: string;
+//                       name: string;
+//                       '@attr': {
+//                           rank: number;
+//                       };
+//                       artist: {
+//                           url: string;
+//                           name: string;
+//                           mbid: string;
+//                       };
+//                   },
+//               ]
+//             | {
+//                   duration: string;
+//                   url: string;
+//                   name: string;
+//                   '@attr': {
+//                       rank: number;
+//                   };
+//                   artist: {
+//                       url: string;
+//                       name: string;
+//                       mbid: string;
+//                   };
+//               };
+//     };
+// }
 
 export interface IMBAlbumResponse {
     'release-groups': Array<IMBAlbum>;

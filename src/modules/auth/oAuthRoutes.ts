@@ -7,6 +7,7 @@ import { Router, Request } from 'express';
 import COOKIE_OPTIONS from './utils/COOKIE_OPTIONS';
 import AuthService from './AuthService';
 import authMiddleware from './middlewares/authMiddleware';
+import { optionalAuth } from './middlewares/optionalAuth';
 
 interface AuthenticatedUser {
     id: string;
@@ -26,10 +27,21 @@ export const oAuthRoutes = (authService: AuthService) => {
                 clientSecret: env.GOOGLE_CLIENT_SECRET,
                 callbackURL: env.GOOGLE_OAUTH_REDIRECT_URL,
                 scope: ['profile', 'email'],
+                passReqToCallback: true,
             },
-            async (accessToken, refreshToken, profile, cb) => {
+            async (req, accessToken, refreshToken, profile, cb) => {
                 try {
-                    authService.oAuthLogin(profile, cb);
+                    console.log(req.userId);
+                    const data = await authService.oAuthLogin(profile, req.userId);
+                    if (data instanceof Error) {
+                        return cb(data);
+                    }
+
+                    if ('message' in data) {
+                        return cb(new Error(data.message));
+                    }
+
+                    cb(null, data);
                 } catch (err) {
                     cb(err);
                 }
@@ -98,9 +110,13 @@ export const oAuthRoutes = (authService: AuthService) => {
         });
     });
 
-    router.get('/login/google', passport.authenticate('google', { session: false }));
+    router.get(
+        '/login/google',
+        optionalAuth(authService),
+        passport.authenticate('google', { session: false })
+    );
 
-    router.get('/google/callback', (req: Request, res, next) => {
+    router.get('/google/callback', optionalAuth(authService), (req: Request, res, next) => {
         passport.authenticate(
             'google',
             {
@@ -121,7 +137,7 @@ export const oAuthRoutes = (authService: AuthService) => {
 
                 try {
                     const user = rawUser as AuthenticatedUser;
-                    const { token, refresh } = authService.generateTokens(user.id);
+                    const { token, refresh } = authService.generateTokens(user.id, false);
 
                     const username = user.profile?.username ?? '';
 

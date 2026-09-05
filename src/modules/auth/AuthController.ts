@@ -25,10 +25,20 @@ class AuthController {
         res.status(200).json({ status: 'success', user: me });
     };
 
+    getGuest = async (req: Request, res: Response) => {
+        if (!req.cookies.guest_id) {
+            throw new AuthError(404, 'Guest id not found');
+        }
+
+        const guest = await this.authService.getGuest(req.cookies.guest_id);
+
+        return res.status(200).json({ status: 'success', message: 'Guest found', guest });
+    };
+
     resendVerification = async (req: Request, res: Response) => {
         this.authService.resendEmail(req.body.email);
 
-        res.json({ status: 'success', message: 'Verify your email' });
+        return res.json({ status: 'success', message: 'Verify your email' });
     };
 
     refresh = async (req: Request, res: Response) => {
@@ -36,7 +46,8 @@ class AuthController {
         if (!refresh) throw new AuthError(401, 'No refresh token available');
         const { accessToken, refresh: refreshToken } = await this.authService.refresh(refresh);
 
-        res.status(200)
+        return res
+            .status(200)
             .cookie('token', accessToken, COOKIE_OPTIONS(1000 * 60 * 65))
             .cookie('refresh', refreshToken, COOKIE_OPTIONS(1000 * 60 * 60 * 24 * 7))
             .json({ status: 'success', message: 'Authorization refreshed' });
@@ -53,6 +64,16 @@ class AuthController {
             .json({ status: 'success', message: 'Login successful', username });
     };
 
+    createGuest = async (req: Request, res: Response) => {
+        const { user, refresh, token } = await this.authService.createGuest();
+
+        return res
+            .status(201)
+            .cookie('token', token, COOKIE_OPTIONS(1000 * 60 * 65))
+            .cookie('refresh', refresh.token, COOKIE_OPTIONS(1000 * 60 * 60 * 24 * 30))
+            .json({ status: 'success', message: 'guest created', guest: user });
+    };
+
     logout = async (req: Request, res: Response) => {
         const { refresh } = req.cookies;
         await this.authService.deleteRefreshToken(refresh);
@@ -65,8 +86,9 @@ class AuthController {
     };
 
     create = async (req: Request, res: Response) => {
+        const userId = req.userId;
         const { email, password } = req.body;
-        await this.authService.register(email, password);
+        await this.authService.register(email, password, userId);
 
         return res.status(200).json({ status: 'success', message: 'Verify your email' });
     };

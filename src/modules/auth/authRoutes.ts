@@ -1,6 +1,5 @@
 import { Router, type Request, type Response } from 'express';
 import type AuthController from './AuthController.js';
-import authMiddleware from './middlewares/authMiddleware.js';
 import setLimiter from './middlewares/limiter.js';
 import validateBody from './middlewares/validateBody.js';
 import {
@@ -9,8 +8,11 @@ import {
     formSchema,
     registerSchema,
 } from './schemas/authSchema.js';
+import authMiddleware from './middlewares/authMiddleware.js';
+import { optionalAuth } from './middlewares/optionalAuth.js';
+import AuthService from './AuthService.js';
 
-const authRoutes = (controller: AuthController) => {
+const authRoutes = (controller: AuthController, authService: AuthService) => {
     const router = Router();
 
     router.get('/me', authMiddleware, (req: Request, res: Response) => controller.me(req, res));
@@ -29,9 +31,16 @@ const authRoutes = (controller: AuthController) => {
 
     router.post(
         '/register',
+        optionalAuth(authService),
         setLimiter(0.1, 3),
         validateBody(registerSchema),
         (req: Request, res: Response) => controller.create(req, res)
+    );
+
+    router.get('/guest', (req: Request, res: Response) => controller.getGuest(req, res));
+
+    router.post('/guest', setLimiter(0.1, 3), (req: Request, res: Response) =>
+        controller.createGuest(req, res)
     );
 
     router.post('/resendVerification', setLimiter(10, 3), (req: Request, res: Response) =>

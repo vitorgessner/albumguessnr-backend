@@ -9,6 +9,7 @@ import FriendError from '../../modules/friends/errors/FriendError.js';
 import IntegrationError from '../../modules/integration/errors/IntegrationError.js';
 import { logger } from '../../config/logger/logger.js';
 import { sanitizeError } from '../utils/sanitizeCause.js';
+import { DailyError } from '../../modules/dailyAlbum/errors/DailyError.js';
 
 const globalErrorMiddleware = (err: Error, req: Request, res: Response, _: NextFunction) => {
     let statusCode = 500;
@@ -34,6 +35,12 @@ const globalErrorMiddleware = (err: Error, req: Request, res: Response, _: NextF
     }
 
     if (err instanceof FriendError) {
+        statusCode = err.statusCode;
+        message = err.message;
+        name = err.name;
+    }
+
+    if (err instanceof DailyError) {
         statusCode = err.statusCode;
         message = err.message;
         name = err.name;

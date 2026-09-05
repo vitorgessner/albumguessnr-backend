@@ -10,6 +10,10 @@ export class ProviderService {
             throw new AuthError(401, 'User is not logged in');
         }
 
+        if (!user.accounts || user.accounts.length < 1) {
+            throw new AuthError(404, 'User has not an account connected');
+        }
+
         return user.accounts;
     };
 

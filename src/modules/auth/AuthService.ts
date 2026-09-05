@@ -3,7 +3,6 @@ import ValidationError from '../../shared/errors/ValidationError.js';
 import type AuthRepository from './AuthRepository.js';
 import { randomBytes } from 'node:crypto';
 import jwt from 'jsonwebtoken';
-import { resend } from './utils/transporter.js';
 import AuthError from './errors/AuthError.js';
 import type { UserCreateInput } from '../../generated/prisma/models.js';
 import { env } from '../../shared/config/env.js';
@@ -12,7 +11,8 @@ import ProfileRepository from '../profile/ProfileRepository.js';
 import winston from 'winston';
 import { sanitizeError } from '../../shared/utils/sanitizeCause.js';
 import { buildEmailTemplate } from './utils/buildEmail.js';
-import { Profile, VerifyCallback } from 'passport-google-oauth20';
+import { Profile } from 'passport-google-oauth20';
+import { sendMail } from '../../shared/utils/sendMail.js';
 
 class AuthService {
     constructor(
@@ -27,11 +27,26 @@ class AuthService {
         return users;
     };
 
+    getGuest = async (id: string | undefined) => {
+        if (!id) {
+            throw new AuthError(400, 'No id was provided');
+        }
+
+        const guest = await this.authRepo.findById(id);
+        if (!guest) {
+            throw new AuthError(404, 'Guest was not found');
+        }
+
+        return guest;
+    };
+
     me = async (id: string) => {
         const me = await this.authRepo.findByIdWithProfileAndAccounts(id);
-        if (!me || !me.userStats) return null;
+        if (!me) return null;
 
-        me.userStats.totalScore = Math.round(me.userStats.totalScore / 100);
+        if (me.userStats) {
+            me.userStats.totalScore = Math.round(me.userStats?.totalScore / 100);
+        }
 
         return me;
     };
@@ -43,17 +58,19 @@ class AuthService {
         const refreshToken = this.generateToken();
         const refresh = await this.authRepo.createRefreshToken(refreshToken, email);
 
-        const token = this.generateJwtToken(validUser.id);
+        const token = this.generateJwtToken(validUser.id, validUser.isGuest);
 
         return { token, refresh: refresh.token, username: validUser.profile?.username };
     };
 
-    oAuthLogin = async (profile: Profile, cb: VerifyCallback) => {
-        if (!profile._json.email) return cb(new AuthError(404, 'Email not found'));
+    oAuthLogin = async (profile: Profile, userId?: string) => {
+        if (!profile._json.email) return new AuthError(404, 'Email not found');
 
         const fallbackUsername =
             profile.displayName || profile.emails?.[0]?.value.split('@')[0] || profile.id;
+
         const existingUser = await this.authRepo.findByEmail(profile._json.email);
+
         const isEmailVerified =
             (existingUser?.emailVerified || profile._json.email_verified) ?? false;
 
@@ -70,29 +87,29 @@ class AuthService {
         };
 
         if (existingUser && existingUser.emailVerified) {
-            const newUser = await this.authRepo.upsertUserWithAccount(user, account);
+            const newUser = await this.authRepo.upsertUserWithAccount(user, account, userId);
 
             if (!newUser) {
-                return cb(new Error('Failed to login with google'));
+                return new Error('Failed to login with google');
             }
 
-            return cb(null, newUser);
+            return newUser;
         }
 
         if (!isEmailVerified) {
             await this.sendTokenToEmail(profile._json.email);
-            return cb(null, false, { message: 'Email not verified' });
+            return { user: null, message: 'Email not verified' };
         }
 
-        const newUser = await this.authRepo.upsertUserWithAccount(user, account);
+        const newUser = await this.authRepo.upsertUserWithAccount(user, account, userId);
         if (!newUser) {
-            return cb(new Error('Failed to login with google'));
+            return new Error('Failed to login with google');
         }
 
-        return cb(null, newUser);
+        return newUser;
     };
 
-    register = async (email: string, password?: string) => {
+    register = async (email: string, password?: string, userId?: string) => {
         if (!email) throw new ValidationError(400, 'Email is required');
 
         const user = await this.authRepo.findByEmail(email);
@@ -104,7 +121,7 @@ class AuthService {
         });
 
         if (user && password) {
-            this.sendMail(
+            sendMail(
                 email,
                 'Account creation attempt',
                 buildEmailTemplate(
@@ -125,19 +142,28 @@ class AuthService {
         }
 
         if (!password) {
-            const newUserInput = this.generateUser(email, null, true);
+            const newUserInput = this.generateUser(email, null, true, userId);
             const newUser = await this.authRepo.create(newUserInput);
             return { status: newUser ? 'success' : 'error', user: newUser };
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
-        const newUser = this.generateUser(email, hashedPassword);
+        const newUser = this.generateUser(email, hashedPassword, false, userId);
 
         const createdUser = await this.authRepo.create(newUser);
 
         await this.sendTokenToEmail(email);
 
         return { status: 'success', user: createdUser };
+    };
+
+    createGuest = async () => {
+        const user = await this.authRepo.createGuest();
+        await this.authRepo.deleteTokensViaId(user.id);
+        const { token, refresh } = this.generateTokens(user.id, user.isGuest);
+        const refreshToken = await this.authRepo.createRefreshTokenForGuest(refresh, user.id);
+
+        return { user, token, refresh: refreshToken };
     };
 
     createAccount = async (account: AccountCreateInputWithUser) => {
@@ -184,7 +210,7 @@ class AuthService {
             username: user?.profile?.username,
         });
 
-        this.sendMail(
+        sendMail(
             email,
             'Email already verified',
             buildEmailTemplate(
@@ -244,7 +270,7 @@ class AuthService {
         const resetToken = passwordResetToken.token;
 
         const childLogger = this.instantiateChildLogger({ email });
-        this.sendMail(
+        sendMail(
             email,
             'Forgot your password',
             buildEmailTemplate(
@@ -280,7 +306,7 @@ class AuthService {
             verificationToken.token
         );
 
-        const token = this.generateJwtToken(validUser.id);
+        const token = this.generateJwtToken(validUser.id, validUser.isGuest);
 
         const user = await this.authRepo.findByIdWithProfileAndAccounts(verificationToken.user.id);
         if (!user) throw new AuthError(404, 'user does not exists');
@@ -319,7 +345,7 @@ class AuthService {
             refreshToken.user.email
         );
 
-        const accessToken = this.generateJwtToken(refreshToken.userId);
+        const accessToken = this.generateJwtToken(refreshToken.userId, refreshToken.user.isGuest);
 
         return { accessToken, refresh: refresh.token };
     };
@@ -331,9 +357,9 @@ class AuthService {
         return await this.authRepo.deleteRefreshToken(refreshToken.token);
     };
 
-    generateTokens = (id: string) => {
+    generateTokens = (id: string, isGuest: boolean) => {
         const refresh = this.generateToken();
-        const token = this.generateJwtToken(id);
+        const token = this.generateJwtToken(id, isGuest);
 
         return { token, refresh };
     };
@@ -378,32 +404,28 @@ class AuthService {
         return randomBytes(32).toString('hex');
     };
 
-    private generateJwtToken = (id: string) => {
-        return jwt.sign({ id }, env.SECRET_JWT as jwt.Secret, {
+    private generateJwtToken = (id: string, isGuest: boolean) => {
+        return jwt.sign({ id, isGuest }, env.SECRET_JWT as jwt.Secret, {
             expiresIn: '1h',
-        });
-    };
-
-    private sendMail = async (to: string, subject: string, html: string) => {
-        await resend.emails.send({
-            from: 'noreply@albumguessnr.com',
-            to,
-            subject,
-            html,
         });
     };
 
     private generateUser = (
         email: string,
         hashedPassword: string | null,
-        emailVerified: boolean = false
+        emailVerified: boolean = false,
+        userId?: string | undefined
     ) => {
         const newUser: UserCreateInput = {
             email,
             password: hashedPassword,
             emailVerified: emailVerified,
-            createdAt: new Date(),
         };
+
+        if (userId) {
+            newUser.id = userId;
+        }
+
         return newUser;
     };
 
@@ -414,7 +436,7 @@ class AuthService {
         const verificationToken = userVerificationToken.token;
 
         const childLogger = this.instantiateChildLogger({ email });
-        this.sendMail(
+        sendMail(
             email,
             'Verify your account',
             buildEmailTemplate(

@@ -105,47 +105,6 @@ class IntegrationRepository {
         });
     };
 
-    // connectLastfmUser = async (
-    //     lastfmUsername: string,
-    //     lastfmDisplayUsername: string,
-    //     userId: string
-    // ) => {
-    //     return await prisma.$transaction([
-    //         prisma.user.update({
-    //             where: {
-    //                 id: userId,
-    //             },
-    //             data: {
-    //                 lastfmIntegrationId: null,
-    //             },
-    //         }),
-    //         prisma.lastFmIntegration.upsert({
-    //             where: {
-    //                 lastfmUsername,
-    //             },
-    //             update: {
-    //                 lastfmDisplayUsername,
-    //                 users: {
-    //                     connect: {
-    //                         id: userId,
-    //                     },
-    //                 },
-    //             },
-    //             create: {
-    //                 lastfmUsername,
-    //                 lastfmDisplayUsername,
-    //                 lastPageSynced: 0,
-    //                 lastSyncedAt: new Date(),
-    //                 users: {
-    //                     connect: {
-    //                         id: userId,
-    //                     },
-    //                 },
-    //             },
-    //         }),
-    //     ]);
-    // };
-
     syncAlbum = async (userId: string, album: IUserAlbumFamiliarity) => {
         await prisma.userAlbumFamiliarity.upsert({
             where: {

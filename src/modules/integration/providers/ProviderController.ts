@@ -12,9 +12,6 @@ export class ProviderController {
         }
 
         const providers = await this.providerService.findAllUserProviders(id);
-        if (!providers || providers.length < 1) {
-            throw new AuthError(404, 'User has not an account connected');
-        }
 
         const spotifyProvider = providers.find((account) => account.provider === 'spotify');
         const lastfmProvider = providers.find((account) => account.provider === 'lastfm');
@@ -42,9 +39,6 @@ export class ProviderController {
         }
 
         const providers = await this.providerService.findAllUserProviders(id);
-        if (!providers || providers.length < 1) {
-            throw new AuthError(404, 'User has not an account connected');
-        }
 
         const lastfmProvider = providers.find((account) => account.provider === 'lastfm');
         const spotifyProvider = providers.find((account) => account.provider === 'spotify');
