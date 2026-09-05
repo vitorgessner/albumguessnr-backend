@@ -23,6 +23,13 @@ export interface ITopAlbumResponse {
 }
 
 export interface IAlbumInfo {
+    mbid: string;
+    playcount: string;
+    listeners: string;
+    url: string;
+    image: {
+        '#text': string;
+    }[];
     tags: {
         tag:
             | [

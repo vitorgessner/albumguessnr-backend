@@ -219,10 +219,10 @@ export class LastfmWrapper implements IProviderConnector {
         }
     };
 
-    private getCoverUrl = (album: ITopAlbumResponse, logger: winston.Logger): string => {
+    getCoverUrl = (album: ITopAlbumResponse | IAlbumInfo, logger?: winston.Logger): string => {
         const cover_url = album.image[album.image.length - 1]?.['#text'];
         if (!cover_url) {
-            logger.error(new IntegrationError(404, 'Cover_url not found'));
+            logger?.error(new IntegrationError(404, 'Cover_url not found'));
             throw new IntegrationError(404, 'Cover_url not found');
         }
 
@@ -315,10 +315,10 @@ export class LastfmWrapper implements IProviderConnector {
         return [];
     };
 
-    private fetchInfoWithAlbumData = async (
+    fetchInfoWithAlbumData = async (
         name: string,
         artist: string,
-        logger: winston.Logger
+        logger?: winston.Logger
     ): Promise<IAlbumInfo | undefined> => {
         try {
             if (!this.account.accessToken) {
@@ -349,12 +349,12 @@ export class LastfmWrapper implements IProviderConnector {
             const info: IAlbumInfo = response.data.album;
 
             if (!info) {
-                logger.warn(new IntegrationError(404, 'No info found on lastfm'));
+                logger?.warn(new IntegrationError(404, 'No info found on lastfm'));
             }
 
             return info;
         } catch (err) {
-            logger.error(
+            logger?.error(
                 new IntegrationError(500, 'Failed to fetch albums tracks', {
                     cause: sanitizeError(err),
                 })

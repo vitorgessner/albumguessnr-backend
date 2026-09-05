@@ -10,7 +10,7 @@ type AlbumCreateInputWithoutMbid = Omit<AlbumCreateInput, 'mbid'> & {
     mbid: string | null;
 };
 
-type ArtistCreateInputWithoutMbid = Omit<ArtistCreateInput, 'mbid'> & {
+export type ArtistCreateInputWithoutMbid = Omit<ArtistCreateInput, 'mbid'> & {
     mbid: string | null;
 };
 
@@ -19,6 +19,41 @@ class AlbumRepository {
         return await prisma.album.findUnique({
             where: {
                 id: albumId,
+            },
+            include: {
+                artists: {
+                    include: {
+                        artist: true,
+                    },
+                },
+                genres: {
+                    include: {
+                        genre: true,
+                    },
+                },
+            },
+        });
+    };
+
+    getByTitle = async (title: string) => {
+        return await prisma.album.findMany({
+            where: {
+                normalizedName: {
+                    contains: title,
+                    mode: 'insensitive',
+                },
+            },
+            include: {
+                artists: {
+                    include: {
+                        artist: true,
+                    },
+                },
+                genres: {
+                    include: {
+                        genre: true,
+                    },
+                },
             },
         });
     };
@@ -108,6 +143,115 @@ class AlbumRepository {
                 tracks: { include: { album: true } },
             },
             update: {},
+        });
+    };
+
+    upsertDailyAlbum = async (
+        data: AlbumCreateInputWithoutMbid,
+        genres: Array<GenreCreateInput>,
+        artists: Array<ArtistCreateInputWithoutMbid>,
+        tracks: Array<TrackCreateWithoutAlbumInput>
+    ) => {
+        const tracksMap = new Map<string, TrackCreateWithoutAlbumInput>();
+        tracks.forEach((track) => tracksMap.set(track.normalizedName, track));
+
+        const uniqueTracks: Array<TrackCreateWithoutAlbumInput> = [];
+        tracksMap.forEach((track) => uniqueTracks.push(track));
+
+        return await prisma.album.upsert({
+            where: {
+                normalizedName_normalizedArtist: {
+                    normalizedName: data.normalizedName,
+                    normalizedArtist: data.normalizedArtist,
+                },
+            },
+            create: {
+                mbid: data.mbid,
+                name: data.name,
+                normalizedName: data.normalizedName,
+                normalizedArtist: data.normalizedArtist,
+                year: data.year ?? null,
+                cover_url: data.cover_url,
+                genres: {
+                    create: genres.map((g) => ({
+                        genre: {
+                            connectOrCreate: {
+                                where: { name: g.name },
+                                create: { name: g.name },
+                            },
+                        },
+                    })),
+                },
+                artists: {
+                    create: artists.map((a) => ({
+                        artist: {
+                            connectOrCreate: {
+                                where: { normalizedName: a.normalizedName },
+                                create: {
+                                    name: a.name,
+                                    normalizedName: a.normalizedName,
+                                    mbid: a.mbid,
+                                },
+                            },
+                        },
+                    })),
+                },
+                tracks: {
+                    create: uniqueTracks.map((t) => ({
+                        name: t.name,
+                        normalizedName: t.normalizedName,
+                    })),
+                },
+            },
+            include: {
+                genres: { include: { genre: true } },
+                artists: { include: { artist: true } },
+                tracks: { include: { album: true } },
+            },
+            update: {
+                genres: {
+                    deleteMany: {},
+                    create: genres.map((g) => ({
+                        genre: {
+                            connectOrCreate: {
+                                where: { name: g.name },
+                                create: { name: g.name },
+                            },
+                        },
+                    })),
+                },
+                artists: {
+                    deleteMany: {},
+                    create: artists.map((a) => ({
+                        artist: {
+                            connectOrCreate: {
+                                where: { normalizedName: a.normalizedName },
+                                create: {
+                                    name: a.name,
+                                    normalizedName: a.normalizedName,
+                                    mbid: a.mbid,
+                                },
+                            },
+                        },
+                    })),
+                },
+            },
+        });
+    };
+
+    includeRYMDataInAlbum = async (
+        albumId: string,
+        RYMData: { position: number; avg_rating: number; descriptors: string[] }
+    ) => {
+        return await prisma.album.update({
+            where: {
+                id: albumId,
+            },
+            data: {
+                rymRanking: RYMData.position,
+                rymRating: RYMData.avg_rating,
+                descriptors: RYMData.descriptors,
+            },
         });
     };
 }

@@ -20,12 +20,30 @@ class AuthRepository {
         });
     };
 
+    findById = async (id: string) => {
+        return await prisma.user.findUnique({
+            where: { id },
+            include: {
+                refreshToken: true,
+            },
+        });
+    };
+
     findByEmail = async (email: string) => {
         return await prisma.user.findUnique({
             where: { email },
             include: {
                 profile: true,
                 accounts: true,
+            },
+        });
+    };
+
+    findRefreshTokenByEmail = async (email: string) => {
+        return await prisma.user.findUnique({
+            where: { email },
+            select: {
+                refreshToken: true,
             },
         });
     };
@@ -67,15 +85,36 @@ class AuthRepository {
             return null;
         }
 
-        const username = user.email.split('@')[0]! + Math.round(Math.random() * 100000000);
-        return await prisma.user.create({
-            data: {
+        const id = user.id || '';
+
+        const username = String(Math.round(Math.random() * 100000000));
+        return await prisma.user.upsert({
+            where: {
+                id,
+            },
+            create: {
                 email: user.email,
                 password: user.password ?? null,
                 emailVerified: user.emailVerified ?? false,
                 profile: {
                     create: {
-                        username: username,
+                        username,
+                        displayUsername: username,
+                        avatar_url: this.default_avatar,
+                        bio: '',
+                    },
+                },
+                userStats: {
+                    create: {},
+                },
+            },
+            update: {
+                email: user.email,
+                password: user.password ?? null,
+                emailVerified: user.emailVerified ?? false,
+                profile: {
+                    create: {
+                        username,
                         displayUsername: username,
                         avatar_url: this.default_avatar,
                         bio: '',
@@ -91,6 +130,14 @@ class AuthRepository {
                         username: true,
                     },
                 },
+            },
+        });
+    };
+
+    createGuest = async () => {
+        return await prisma.user.create({
+            data: {
+                isGuest: true,
             },
         });
     };
@@ -134,13 +181,81 @@ class AuthRepository {
 
     upsertUserWithAccount = async (
         user: UserCreateInput,
-        account: AccountCreateWithoutUserInput
+        account: AccountCreateWithoutUserInput,
+        userId: string | undefined
     ) => {
         if (!user.email) {
             return null;
         }
 
-        const username = user.email.split('@')[0]! + Math.round(Math.random() * 100000000);
+        const username = String(Math.round(Math.random() * 100000000));
+
+        if (userId) {
+            return await prisma.user.upsert({
+                where: {
+                    id: userId,
+                },
+                create: {
+                    email: user.email,
+                    password: user.password ?? null,
+                    emailVerified: user.emailVerified ?? false,
+                    isGuest: false,
+                    profile: {
+                        create: {
+                            username,
+                            displayUsername: username,
+                            avatar_url: this.default_avatar,
+                            bio: '',
+                        },
+                    },
+                    userStats: {
+                        create: {},
+                    },
+                    accounts: {
+                        create: {
+                            ...account,
+                            username: account.username ?? username,
+                            displayUsername: account.username ?? username,
+                        },
+                    },
+                },
+                update: {
+                    email: user.email,
+                    password: user.password ?? null,
+                    emailVerified: user.emailVerified ?? false,
+                    isGuest: false,
+                    profile: {
+                        create: {
+                            username,
+                            displayUsername: username,
+                            avatar_url: this.default_avatar,
+                            bio: '',
+                        },
+                    },
+                    userStats: {
+                        create: {},
+                    },
+                    accounts: {
+                        connectOrCreate: {
+                            where: {
+                                provider_providerAccountId: {
+                                    provider: account.provider,
+                                    providerAccountId: account.providerAccountId,
+                                },
+                            },
+                            create: {
+                                ...account,
+                            },
+                        },
+                    },
+                },
+                include: {
+                    accounts: true,
+                    profile: true,
+                },
+            });
+        }
+
         return prisma.user.upsert({
             where: {
                 email: user.email,
@@ -149,6 +264,7 @@ class AuthRepository {
                 email: user.email,
                 password: user.password ?? null,
                 emailVerified: user.emailVerified ?? false,
+                isGuest: false,
                 profile: {
                     create: {
                         username: username,
@@ -252,6 +368,20 @@ class AuthRepository {
         });
     };
 
+    createRefreshTokenForGuest = async (token: string, id: string) => {
+        return await prisma.refreshToken.create({
+            data: {
+                token,
+                expirationTime: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30),
+                user: {
+                    connect: {
+                        id,
+                    },
+                },
+            },
+        });
+    };
+
     deleteVerificationToken = async (token: string) => {
         return await prisma.verificationToken.delete({
             where: {
@@ -278,6 +408,7 @@ class AuthRepository {
             },
             data: {
                 emailVerified: true,
+                isGuest: false,
                 verificationToken: {
                     delete: {
                         token,
@@ -293,6 +424,14 @@ class AuthRepository {
                 user: {
                     email,
                 },
+            },
+        });
+    };
+
+    deleteTokensViaId = async (id: string) => {
+        return await prisma.verificationToken.deleteMany({
+            where: {
+                userId: id,
             },
         });
     };

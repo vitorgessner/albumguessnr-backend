@@ -7,6 +7,7 @@ declare global {
     namespace Express {
         interface Request {
             userId?: string;
+            isGuest?: boolean;
         }
     }
 }
@@ -21,6 +22,7 @@ const authMiddleware = (req: Request, res: Response, next: NextFunction) => {
     try {
         const decoded = jwt.verify(token, secret) as jwt.JwtPayload;
         req.userId = decoded.id;
+        req.isGuest = decoded.isGuest;
     } catch {
         throw new AuthError(401, 'Invalid or expired token');
     }
