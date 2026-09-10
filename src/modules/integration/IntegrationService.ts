@@ -161,8 +161,6 @@ class IntegrationService {
         const user = await this.profileRepo.findByUserId(id);
         if (!user) throw new IntegrationError(404, 'User not found');
 
-        console.log(user);
-
         const userAlbumsQtd = await this.integrationRepo.countUserAlbums(user.userId);
 
         const rand = userAlbumsQtd < 50 ? 0 : Math.floor(Math.random() * (userAlbumsQtd - 50));

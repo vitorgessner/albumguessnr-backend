@@ -104,10 +104,12 @@ model VerificationToken {
 }
 
 model RefreshToken {
-  token          String   @id
-  expirationTime DateTime
-  userId         String
-  user           User     @relation(fields: [userId], references: [id])
+  token           String   @id
+  expirationTime  DateTime
+  replacedAt      DateTime @default(now())
+  replacedByToken String?
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
 }
 
 model GuessAttempt {

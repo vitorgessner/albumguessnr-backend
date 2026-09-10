@@ -1,6 +1,7 @@
 import { prisma } from '../../config/prisma';
 import { Prisma } from '../../generated/prisma/client';
 import { isToday } from '../../shared/utils/isToday';
+import { DailyError } from './errors/DailyError';
 
 export class DailyAlbumRepository {
     getDailyAlbum = async () => {
@@ -57,7 +58,24 @@ export class DailyAlbumRepository {
     };
 
     getDailyAlbumNumber = async () => {
-        return await prisma.dailyAlbum.count();
+        const albums = await prisma.dailyAlbum.findMany({
+            orderBy: {
+                date: 'asc',
+            },
+        });
+
+        const index = albums.findIndex(
+            (album) =>
+                album.date.getUTCFullYear() === new Date().getUTCFullYear() &&
+                album.date.getUTCMonth() === new Date().getUTCMonth() &&
+                album.date.getUTCDate() === new Date().getUTCDate()
+        );
+
+        if (index > -1) {
+            return index + 1;
+        }
+
+        throw new DailyError(404, 'Daily album not found');
     };
 
     getElectableDailyAlbums = async () => {

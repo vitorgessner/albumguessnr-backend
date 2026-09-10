@@ -15,7 +15,6 @@ export class DailyAlbumController {
     ) {}
 
     getDailyAlbum = async (req: Request, res: Response) => {
-        console.log('controller');
         const userId = req.userId;
 
         const { dailyAlbum, dailyAlbumTotalGuessesCount, dailyAlbumNumber, url } =
@@ -35,8 +34,8 @@ export class DailyAlbumController {
 
             return res
                 .status(200)
-                .cookie('token', guest.token, COOKIE_OPTIONS(1000 * 60 * 65))
-                .cookie('refresh', guest.refresh.token, COOKIE_OPTIONS(1000 * 60 * 60 * 24 * 30))
+                .cookie('token', guest.token, COOKIE_OPTIONS(1000 * 90))
+                .cookie('refresh', guest.refresh, COOKIE_OPTIONS(1000 * 60 * 60 * 24 * 30))
                 .json(json);
         }
 

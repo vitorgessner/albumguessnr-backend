@@ -26,11 +26,11 @@ class AuthController {
     };
 
     getGuest = async (req: Request, res: Response) => {
-        if (!req.cookies.guest_id) {
-            throw new AuthError(404, 'Guest id not found');
+        if (!req.cookies.token) {
+            throw new AuthError(404, 'Token id not found');
         }
 
-        const guest = await this.authService.getGuest(req.cookies.guest_id);
+        const guest = await this.authService.getGuest(req.cookies.token);
 
         return res.status(200).json({ status: 'success', message: 'Guest found', guest });
     };
@@ -48,7 +48,7 @@ class AuthController {
 
         return res
             .status(200)
-            .cookie('token', accessToken, COOKIE_OPTIONS(1000 * 60 * 65))
+            .cookie('token', accessToken, COOKIE_OPTIONS(1000 * 30))
             .cookie('refresh', refreshToken, COOKIE_OPTIONS(1000 * 60 * 60 * 24 * 7))
             .json({ status: 'success', message: 'Authorization refreshed' });
     };
@@ -69,8 +69,8 @@ class AuthController {
 
         return res
             .status(201)
-            .cookie('token', token, COOKIE_OPTIONS(1000 * 60 * 65))
-            .cookie('refresh', refresh.token, COOKIE_OPTIONS(1000 * 60 * 60 * 24 * 30))
+            .cookie('token', token, COOKIE_OPTIONS(1000 * 30))
+            .cookie('refresh', refresh, COOKIE_OPTIONS(1000 * 60 * 60 * 24 * 30))
             .json({ status: 'success', message: 'guest created', guest: user });
     };
 

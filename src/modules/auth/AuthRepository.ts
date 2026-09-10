@@ -354,14 +354,14 @@ class AuthRepository {
         });
     };
 
-    createRefreshToken = async (token: string, email: string) => {
+    createRefreshToken = async (token: string, id: string) => {
         return await prisma.refreshToken.create({
             data: {
                 token,
                 expirationTime: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7),
                 user: {
                     connect: {
-                        email,
+                        id,
                     },
                 },
             },
@@ -418,6 +418,18 @@ class AuthRepository {
         });
     };
 
+    setReplacedByToken = async (token: string, tokenToSet: string) => {
+        return await prisma.refreshToken.update({
+            where: {
+                token,
+            },
+            data: {
+                replacedByToken: tokenToSet,
+                replacedAt: new Date(),
+            },
+        });
+    };
+
     deleteTokens = async (email: string) => {
         return await prisma.verificationToken.deleteMany({
             where: {
@@ -430,6 +442,14 @@ class AuthRepository {
 
     deleteTokensViaId = async (id: string) => {
         return await prisma.verificationToken.deleteMany({
+            where: {
+                userId: id,
+            },
+        });
+    };
+
+    deleteRefreshTokensViaId = async (id: string) => {
+        return await prisma.refreshToken.deleteMany({
             where: {
                 userId: id,
             },

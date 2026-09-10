@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "RefreshToken" ADD COLUMN     "replacedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "replacedByToken" TEXT;

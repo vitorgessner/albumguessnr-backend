@@ -31,7 +31,6 @@ export const oAuthRoutes = (authService: AuthService) => {
             },
             async (req, accessToken, refreshToken, profile, cb) => {
                 try {
-                    console.log(req.userId);
                     const data = await authService.oAuthLogin(profile, req.userId);
                     if (data instanceof Error) {
                         return cb(data);
@@ -124,7 +123,7 @@ export const oAuthRoutes = (authService: AuthService) => {
                 failureMessage: true,
                 session: false,
             },
-            (err: unknown, rawUser: Express.User, info?: { message?: string }) => {
+            async (err: unknown, rawUser: Express.User, info?: { message?: string }) => {
                 if (err || !rawUser)
                     return res.redirect(env.FRONTEND_URL + '/auth/login?message=Auth failed');
 
@@ -137,7 +136,7 @@ export const oAuthRoutes = (authService: AuthService) => {
 
                 try {
                     const user = rawUser as AuthenticatedUser;
-                    const { token, refresh } = authService.generateTokens(user.id, false);
+                    const { token, refresh } = await authService.generateTokens(user.id, false);
 
                     const username = user.profile?.username ?? '';
 

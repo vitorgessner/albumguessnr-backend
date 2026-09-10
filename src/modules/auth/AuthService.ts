@@ -55,8 +55,9 @@ class AuthService {
         const user = await this.validateEmail(email);
         const validUser = await this.validatePassword(user, password);
 
+        await this.authRepo.deleteRefreshTokensViaId(validUser.id);
         const refreshToken = this.generateToken();
-        const refresh = await this.authRepo.createRefreshToken(refreshToken, email);
+        const refresh = await this.authRepo.createRefreshToken(refreshToken, validUser.id);
 
         const token = this.generateJwtToken(validUser.id, validUser.isGuest);
 
@@ -160,10 +161,9 @@ class AuthService {
     createGuest = async () => {
         const user = await this.authRepo.createGuest();
         await this.authRepo.deleteTokensViaId(user.id);
-        const { token, refresh } = this.generateTokens(user.id, user.isGuest);
-        const refreshToken = await this.authRepo.createRefreshTokenForGuest(refresh, user.id);
+        const { token, refresh } = await this.generateTokens(user.id, user.isGuest);
 
-        return { user, token, refresh: refreshToken };
+        return { user, token, refresh };
     };
 
     createAccount = async (account: AccountCreateInputWithUser) => {
@@ -333,21 +333,38 @@ class AuthService {
             throw new AuthError(401, 'Token expired');
         }
 
-        if (!refreshToken.user.email) {
+        if (!refreshToken.user.isGuest && !refreshToken.user.email) {
             throw new AuthError(401, 'User is not logged in');
         }
 
-        await this.authRepo.deleteRefreshToken(refreshToken.token);
+        if (!refreshToken.replacedByToken) {
+            const newRefreshToken = this.generateToken();
+            const refresh = await this.authRepo.createRefreshToken(
+                newRefreshToken,
+                refreshToken.user.id
+            );
 
-        const newRefreshToken = this.generateToken();
-        const refresh = await this.authRepo.createRefreshToken(
-            newRefreshToken,
-            refreshToken.user.email
-        );
+            await this.authRepo.setReplacedByToken(refreshToken.token, refresh.token);
 
-        const accessToken = this.generateJwtToken(refreshToken.userId, refreshToken.user.isGuest);
+            const accessToken = this.generateJwtToken(
+                refreshToken.userId,
+                refreshToken.user.isGuest
+            );
 
-        return { accessToken, refresh: refresh.token };
+            return { accessToken, refresh: refresh.token };
+        }
+
+        if (Date.now() - refreshToken.replacedAt.getTime() < 1000 * 10) {
+            const accessToken = this.generateJwtToken(
+                refreshToken.userId,
+                refreshToken.user.isGuest
+            );
+
+            return { accessToken, refresh: refreshToken.replacedByToken };
+        }
+
+        await this.authRepo.deleteRefreshTokensViaId(refreshToken.userId);
+        throw new AuthError(401, 'Refresh token reuse detected');
     };
 
     deleteRefreshToken = async (token: string) => {
@@ -357,11 +374,16 @@ class AuthService {
         return await this.authRepo.deleteRefreshToken(refreshToken.token);
     };
 
-    generateTokens = (id: string, isGuest: boolean) => {
+    generateTokens = async (id: string, isGuest: boolean) => {
         const refresh = this.generateToken();
         const token = this.generateJwtToken(id, isGuest);
+        if (isGuest) {
+            const refreshToken = await this.authRepo.createRefreshTokenForGuest(refresh, id);
+            return { token, refresh: refreshToken.token };
+        }
 
-        return { token, refresh };
+        const refreshToken = await this.authRepo.createRefreshToken(refresh, id);
+        return { token, refresh: refreshToken.token };
     };
 
     private instantiateChildLogger = ({
@@ -406,7 +428,7 @@ class AuthService {
 
     private generateJwtToken = (id: string, isGuest: boolean) => {
         return jwt.sign({ id, isGuest }, env.SECRET_JWT as jwt.Secret, {
-            expiresIn: '1h',
+            expiresIn: '30s',
         });
     };
 
