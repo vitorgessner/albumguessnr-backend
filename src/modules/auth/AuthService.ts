@@ -13,6 +13,7 @@ import { sanitizeError } from '../../shared/utils/sanitizeCause.js';
 import { buildEmailTemplate } from './utils/buildEmail.js';
 import { Profile } from 'passport-google-oauth20';
 import { sendMail } from '../../shared/utils/sendMail.js';
+import * as crypto from 'node:crypto';
 
 class AuthService {
     constructor(
@@ -57,11 +58,12 @@ class AuthService {
 
         await this.authRepo.deleteRefreshTokensViaId(validUser.id);
         const refreshToken = this.generateToken();
-        const refresh = await this.authRepo.createRefreshToken(refreshToken, validUser.id);
+        const hashRefresh = crypto.createHash('sha256').update(refreshToken).digest('hex');
+        await this.authRepo.createRefreshToken(hashRefresh, validUser.id);
 
         const token = this.generateJwtToken(validUser.id, validUser.isGuest);
 
-        return { token, refresh: refresh.token, username: validUser.profile?.username };
+        return { token, refresh: refreshToken, username: validUser.profile?.username };
     };
 
     oAuthLogin = async (profile: Profile, userId?: string) => {
@@ -326,7 +328,8 @@ class AuthService {
     };
 
     refresh = async (token: string) => {
-        const refreshToken = await this.authRepo.findRefreshToken(token);
+        const hashToken = crypto.createHash('sha256').update(token).digest('hex');
+        const refreshToken = await this.authRepo.findRefreshToken(hashToken);
         if (!refreshToken) throw new AuthError(401, 'Token not found');
 
         if (refreshToken.expirationTime.getTime() < new Date(Date.now()).getTime()) {
@@ -339,8 +342,12 @@ class AuthService {
 
         if (!refreshToken.replacedByToken) {
             const newRefreshToken = this.generateToken();
+            const hashRefreshToken = crypto
+                .createHash('sha256')
+                .update(newRefreshToken)
+                .digest('hex');
             const refresh = await this.authRepo.createRefreshToken(
-                newRefreshToken,
+                hashRefreshToken,
                 refreshToken.user.id
             );
 
@@ -351,7 +358,7 @@ class AuthService {
                 refreshToken.user.isGuest
             );
 
-            return { accessToken, refresh: refresh.token };
+            return { accessToken, refresh: newRefreshToken };
         }
 
         if (Date.now() - refreshToken.replacedAt.getTime() < 1000 * 10) {
@@ -360,7 +367,14 @@ class AuthService {
                 refreshToken.user.isGuest
             );
 
-            return { accessToken, refresh: refreshToken.replacedByToken };
+            const newRefreshToken = this.generateToken();
+            const hashRefreshToken = crypto
+                .createHash('sha256')
+                .update(newRefreshToken)
+                .digest('hex');
+            await this.authRepo.createRefreshToken(hashRefreshToken, refreshToken.user.id);
+
+            return { accessToken, refresh: newRefreshToken };
         }
 
         await this.authRepo.deleteRefreshTokensViaId(refreshToken.userId);
