@@ -390,14 +390,15 @@ class AuthService {
 
     generateTokens = async (id: string, isGuest: boolean) => {
         const refresh = this.generateToken();
+        const hashRefreshToken = crypto.createHash('sha256').update(refresh).digest('hex');
         const token = this.generateJwtToken(id, isGuest);
         if (isGuest) {
-            const refreshToken = await this.authRepo.createRefreshTokenForGuest(refresh, id);
-            return { token, refresh: refreshToken.token };
+            await this.authRepo.createRefreshTokenForGuest(hashRefreshToken, id);
+            return { token, refresh };
         }
 
-        const refreshToken = await this.authRepo.createRefreshToken(refresh, id);
-        return { token, refresh: refreshToken.token };
+        await this.authRepo.createRefreshToken(hashRefreshToken, id);
+        return { token, refresh: refresh };
     };
 
     private instantiateChildLogger = ({
