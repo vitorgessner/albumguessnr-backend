@@ -25,6 +25,7 @@ const syncMiddleware = (integrationService: IntegrationService) => {
                 JSON.stringify({
                     userId,
                     providerAccountId: mainProvider.providerAccountId,
+                    syncingId: mainProvider.syncingId,
                 })
             );
 

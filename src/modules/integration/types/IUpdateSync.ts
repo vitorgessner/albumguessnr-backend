@@ -6,4 +6,5 @@ export interface IUpdateSync {
     syncStatus: SyncStatus;
     syncingTimestamp: Date | null;
     hadFailuresInChain: boolean;
+    syncingId: string | null;
 }

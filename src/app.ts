@@ -69,7 +69,7 @@ import { albumRoutes } from './modules/album/albumRoutes.js';
 // eslint-disable-next-line max-len
 import { requireFullAccountMiddleware } from './modules/auth/middlewares/requireFullAccountMiddleware.js';
 import { optionalAuth } from './modules/auth/middlewares/optionalAuth.js';
-import { runCron } from './shared/utils/dailyAlbumCron.js';
+import { runDailyAlbumCron } from './shared/utils/dailyAlbumCron.js';
 import cron from 'node-cron';
 
 export const getApp = (): { app: Application; startConsumers: () => Promise<void> } => {
@@ -227,7 +227,7 @@ export const getApp = (): { app: Application; startConsumers: () => Promise<void
 
     app.use('/daily', optionalAuth(authService), dailyAlbumRoutes(dailyAlbumController));
 
-    cron.schedule('0 7 * * *', () => runCron(), {
+    cron.schedule('0 7 * * *', () => runDailyAlbumCron(), {
         timezone: 'America/Sao_Paulo',
     });
 

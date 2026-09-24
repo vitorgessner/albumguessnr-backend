@@ -3,7 +3,7 @@ import { logger } from '../../config/logger/logger';
 import { env } from '../config/env';
 import { sleep } from './sleep';
 
-export async function runCron() {
+export async function runDailyAlbumCron() {
     const MAX_CRON_RETRIES = 3;
     const BASE_BACKOFF_MS = 2000;
 

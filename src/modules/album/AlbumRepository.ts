@@ -58,6 +58,29 @@ class AlbumRepository {
         });
     };
 
+    getByArtist = async (artist: string) => {
+        return await prisma.album.findMany({
+            where: {
+                normalizedArtist: {
+                    contains: artist,
+                    mode: 'insensitive',
+                },
+            },
+            include: {
+                artists: {
+                    include: {
+                        artist: true,
+                    },
+                },
+                genres: {
+                    include: {
+                        genre: true,
+                    },
+                },
+            },
+        });
+    };
+
     getByTitleAndArtist = async (title: string, artist: string) => {
         return await prisma.album.findUnique({
             where: {

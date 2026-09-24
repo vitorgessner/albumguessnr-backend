@@ -101,6 +101,7 @@ class IntegrationRepository {
                 syncingTimestamp: true,
                 syncStatus: true,
                 hadFailuresInChain: true,
+                syncingId: true,
             },
         });
     };

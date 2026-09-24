@@ -16,7 +16,7 @@ export const dailyAlbumRoutes = (controller: DailyAlbumController) => {
         controller.defineDailyAlbumForDayAfterTomorrow(req, res)
     );
 
-    router.post('/find', (req, res) => controller.findPossibleAlbumsByTitle(req, res));
+    router.post('/find', (req, res) => controller.findPossibleAlbums(req, res));
 
     router.post('/album/try', (req, res) => controller.addDailyAlbumTry(req, res));
 

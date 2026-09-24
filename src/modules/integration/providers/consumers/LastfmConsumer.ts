@@ -48,6 +48,7 @@ export const lastfmConsumer = async (
                     JSON.stringify({
                         userId,
                         providerAccountId: mainProvider.providerAccountId,
+                        syncingId: mainProvider.syncingId,
                     })
                 );
                 const published = channel.publish(exchange, 'sync.lastfm.continuation', newMessage);

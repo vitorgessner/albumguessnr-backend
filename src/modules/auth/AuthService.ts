@@ -91,6 +91,7 @@ class AuthService {
 
         if (existingUser && existingUser.emailVerified) {
             const newUser = await this.authRepo.upsertUserWithAccount(user, account, userId);
+            console.log('newUser', newUser);
 
             if (!newUser) {
                 return new Error('Failed to login with google');
@@ -443,7 +444,7 @@ class AuthService {
 
     private generateJwtToken = (id: string, isGuest: boolean) => {
         return jwt.sign({ id, isGuest }, env.SECRET_JWT as jwt.Secret, {
-            expiresIn: '30s',
+            expiresIn: '1h',
         });
     };
 

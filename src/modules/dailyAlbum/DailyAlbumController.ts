@@ -34,7 +34,7 @@ export class DailyAlbumController {
 
             return res
                 .status(200)
-                .cookie('token', guest.token, COOKIE_OPTIONS(1000 * 90))
+                .cookie('token', guest.token, COOKIE_OPTIONS(1000 * 60 * 65))
                 .cookie('refresh', guest.refresh, COOKIE_OPTIONS(1000 * 60 * 60 * 24 * 30))
                 .json(json);
         }
@@ -81,13 +81,13 @@ export class DailyAlbumController {
         });
     };
 
-    findPossibleAlbumsByTitle = async (req: Request, res: Response) => {
-        const title = req.body.title;
-        if (!title || typeof title !== 'string') {
-            throw new ValidationError(400, 'Title was not provided os has an invalid format');
+    findPossibleAlbums = async (req: Request, res: Response) => {
+        const attempt = req.body.attempt;
+        if (!attempt || typeof attempt !== 'string') {
+            throw new ValidationError(400, 'Attempt was not provided os has an invalid format');
         }
 
-        const possibleAlbums = await this.dailyAlbumService.findPossibleAlbumsByTitle(title);
+        const possibleAlbums = await this.dailyAlbumService.findPossibleAlbums(attempt);
 
         return res.status(200).json({
             status: 'success',

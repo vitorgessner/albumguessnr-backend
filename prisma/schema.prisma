@@ -41,7 +41,7 @@ model User {
 model UserStats {
   id                    String @id @default(uuid())
   userId                String @unique
-  user                  User   @relation(fields: [userId], references: [id])
+  user                  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   totalScore            Int    @default(0)
   guessedDistinctAlbums Int    @default(0)
   guessedAlbums         Int    @default(0)
@@ -64,7 +64,7 @@ model Profile {
   avatar_url      String
   updatedAt       DateTime @updatedAt
   userId          String   @unique
-  user            User     @relation(fields: [userId], references: [id])
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Account {
@@ -83,6 +83,7 @@ model Account {
   syncCursor         Int        @default(1)
   syncStatus         SyncStatus @default(IDLE)
   syncingTimestamp   DateTime?
+  syncingId          String?
   hadFailuresInChain Boolean    @default(false)
 
   @@unique([provider, providerAccountId])
@@ -109,13 +110,13 @@ model RefreshToken {
   replacedAt      DateTime @default(now())
   replacedByToken String?
   userId          String
-  user            User     @relation(fields: [userId], references: [id])
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model GuessAttempt {
   id            String                 @id @default(uuid())
   userId        String
-  user          User                   @relation(fields: [userId], references: [id])
+  user          User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   albumId       String
   album         Album                  @relation(fields: [albumId], references: [id])
   date          DateTime               @default(now())
@@ -149,7 +150,7 @@ model GuessAttemptCategory {
 
 model UserAlbumScores {
   userId    String
-  user      User         @relation(fields: [userId], references: [id])
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   albumId   String
   album     Album        @relation(fields: [albumId], references: [id])
   gameMode  GameCategory
@@ -169,7 +170,7 @@ enum GameCategory {
 
 model UserAlbumStats {
   userId          String
-  user            User     @relation(fields: [userId], references: [id])
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   albumId         String
   album           Album    @relation(fields: [albumId], references: [id])
   lastTimeGuessed DateTime
@@ -186,7 +187,7 @@ model UserAlbumFamiliarity {
   albumId          String
   album            Album    @relation(fields: [albumId], references: [id])
   userId           String
-  user             User?    @relation(fields: [userId], references: [id])
+  user             User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([userId, albumId])
   @@index([userId])
@@ -194,9 +195,9 @@ model UserAlbumFamiliarity {
 
 model UserFriends {
   sentRequestsId     String
-  sentRequests       User         @relation("sentRequests", fields: [sentRequestsId], references: [id])
+  sentRequests       User         @relation("sentRequests", fields: [sentRequestsId], references: [id], onDelete: Cascade)
   receivedRequestsId String
-  receivedRequests   User         @relation("receivedRequests", fields: [receivedRequestsId], references: [id])
+  receivedRequests   User         @relation("receivedRequests", fields: [receivedRequestsId], references: [id], onDelete: Cascade)
   stat               FriendsStats
   timesRequested     Int          @default(0)
   timesRejected      Int          @default(0)
@@ -254,8 +255,8 @@ model AlbumPools {
 
 model UserDailyAlbum {
   id               String               @id @default(uuid())
-  userId           String
-  user             User                 @relation(fields: [userId], references: [id])
+  userId           String?
+  user             User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
   dailyAlbumId     String
   dailyAlbum       DailyAlbum           @relation(fields: [dailyAlbumId], references: [albumId])
   nthPlayerToGuess Int?
@@ -272,8 +273,8 @@ enum UserDailyAlbumStatus {
 
 model DailyAlbumTry {
   id               String         @id @default(uuid())
-  userDailyAlbumId String
-  userDailyAlbum   UserDailyAlbum @relation(fields: [userDailyAlbumId], references: [id])
+  userDailyAlbumId String?
+  userDailyAlbum   UserDailyAlbum? @relation(fields: [userDailyAlbumId], references: [id], onDelete: SetNull)
   nthTry           Int
   albumGuessId     String
   albumGuess       Album          @relation(fields: [albumGuessId], references: [id])
@@ -284,7 +285,7 @@ model DailyAlbumTry {
 
 model UserDailyAlbumOverallStatistics {
   userId               String @id
-  user                 User   @relation(fields: [userId], references: [id])
+  user                 User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   totalGuessed         Int    @default(0)
   correctlyGuessed     Int    @default(0)
   meanToGuess          Float    @default(0)
@@ -338,8 +339,8 @@ model Track {
 
 model FailedAlbumsSync {
   id              String       @id @default(uuid())
-  userId          String
-  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId          String?
+  user            User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
   albumName       String
   albumId         String       @default("")
   mbid            String?
@@ -356,8 +357,8 @@ model FailedAlbumsSync {
 
 model UserAlbumDataErrorsLogs {
   id               String      @id @default(uuid())
-  userId           String
-  user             User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId           String?
+  user             User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
   albumName        String
   albumId          String
   mbid             String?

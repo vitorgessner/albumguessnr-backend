@@ -191,11 +191,36 @@ class AuthRepository {
         const username = String(Math.round(Math.random() * 100000000));
 
         if (userId) {
+            const existingUser = await prisma.user.findUnique({
+                where: {
+                    email: user.email,
+                },
+                include: {
+                    accounts: true,
+                    profile: true,
+                },
+            });
+
+            if (existingUser) {
+                await prisma.user.delete({
+                    where: {
+                        id: userId,
+                        isGuest: true,
+                    },
+                    include: {
+                        refreshToken: true,
+                    },
+                });
+
+                return existingUser;
+            }
+
             return await prisma.user.upsert({
                 where: {
-                    id: userId,
+                    email: user.email,
                 },
                 create: {
+                    id: userId,
                     email: user.email,
                     password: user.password ?? null,
                     emailVerified: user.emailVerified ?? false,
@@ -255,6 +280,8 @@ class AuthRepository {
                 },
             });
         }
+
+        console.log('here?');
 
         return prisma.user.upsert({
             where: {

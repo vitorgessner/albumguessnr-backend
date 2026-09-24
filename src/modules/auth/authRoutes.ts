@@ -11,6 +11,7 @@ import {
 import authMiddleware from './middlewares/authMiddleware.js';
 import { optionalAuth } from './middlewares/optionalAuth.js';
 import AuthService from './AuthService.js';
+import { requireFullAccountMiddleware } from './middlewares/requireFullAccountMiddleware.js';
 
 const authRoutes = (controller: AuthController, authService: AuthService) => {
     const router = Router();
@@ -60,6 +61,13 @@ const authRoutes = (controller: AuthController, authService: AuthService) => {
         '/passwordChange/:passwordResetToken',
         validateBody(changePasswordSchema),
         (req: Request, res: Response) => controller.changePassword(req, res)
+    );
+
+    router.put(
+        '/mainProvider',
+        authMiddleware,
+        requireFullAccountMiddleware,
+        (req: Request, res: Response) => controller.setMainProvider(req, res)
     );
 
     return router;

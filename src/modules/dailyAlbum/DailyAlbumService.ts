@@ -121,8 +121,33 @@ export class DailyAlbumService {
         return statistics;
     };
 
+    findPossibleAlbums = async (attempt: string) => {
+        const possibleAlbums = await this.findPossibleAlbumsByTitle(attempt);
+        const possibleArtists = await this.findPossibleAlbumsByArtist(attempt);
+
+        return [...possibleAlbums, ...possibleArtists];
+    };
+
     findPossibleAlbumsByTitle = async (title: string) => {
         const albums = (await this.albumRepo.getByTitle(title)).filter(
+            (album) => !!album.rymRanking && !!album.rymRating && !!album.descriptors
+        );
+
+        const albumsIds = await Promise.all(
+            albums.map((album) => this.dailyAlbumRepo.findAlbumInPool(album.id))
+        );
+
+        const formattedAlbumsIds = albumsIds
+            .filter((album) => !!album)
+            .map((album) => album.albumId);
+
+        const possibleAlbums = albums.filter((album) => formattedAlbumsIds.includes(album.id));
+
+        return possibleAlbums;
+    };
+
+    findPossibleAlbumsByArtist = async (artist: string) => {
+        const albums = (await this.albumRepo.getByArtist(artist)).filter(
             (album) => !!album.rymRanking && !!album.rymRating && !!album.descriptors
         );
 

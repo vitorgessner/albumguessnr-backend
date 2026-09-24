@@ -11,4 +11,5 @@ export interface ProfileDTO {
     syncCursor: number;
     syncStatus: 'IDLE' | 'SYNCING' | 'SUCCESS' | 'SUCCEEDWITHFAILURE' | 'FAILED';
     syncingTimestamp: Date | null;
+    syncingId: string | null;
 }

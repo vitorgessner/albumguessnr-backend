@@ -11,6 +11,7 @@ import AuthError from '../auth/errors/AuthError.js';
 import type { IAlbumInfo } from './providers/interfaces/lastfmInterfaces.js';
 import type { AxiosInstance } from 'axios';
 import { ITopAlbumResponse } from './providers/interfaces/lastfmInterfaces.js';
+import * as crypto from 'node:crypto';
 
 const apiMap: Record<string, PossibleApis> = {
     spotify: 'SPOTIFY',
@@ -40,23 +41,26 @@ class IntegrationService {
     };
 
     fetchUserAlbums = async (userId: string, provider: IProviderConnector) => {
-        const { provider: providerName, providerAccountId } = provider.getProfile();
+        const { provider: providerName, providerAccountId, syncingId } = provider.getProfile();
 
         const syncStats = await this.integrationRepo.getLastSyncedStats(
             providerName,
             providerAccountId
         );
 
-        if (syncStats?.syncStatus === 'SYNCING') {
-            this.logger.warn('Already syncing');
-            return false;
-        }
-
         const isNewChain = !syncStats?.syncingTimestamp;
         const currentCursor = isNewChain ? provider.getInitialCursor() : syncStats.syncCursor;
         const hadFailuresBeforeThisPage = isNewChain
             ? false
             : (syncStats.hadFailuresInChain ?? false);
+
+        if (
+            syncStats?.syncStatus === 'SYNCING' &&
+            (syncStats.syncingId !== syncingId || !syncStats?.syncingId)
+        ) {
+            this.logger.warn('Already syncing');
+            return false;
+        }
 
         console.log('starting syncing on cursor: ' + currentCursor);
 
@@ -67,6 +71,7 @@ class IntegrationService {
                 syncStatus: 'SYNCING',
                 syncingTimestamp: new Date(Date.now()),
                 hadFailuresInChain: false,
+                syncingId: crypto.randomUUID(),
             });
         }
 
@@ -136,14 +141,12 @@ class IntegrationService {
             })
         );
 
-        if (hasNextPage) {
-            await this.integrationRepo.updateLastSynced(providerName, providerAccountId, {
-                syncCursor,
-                hadFailuresInChain: hadFailuresBeforeThisPage || rejectedAlbums.length > 0,
+        if (!hasNextPage || currentCursor === 1000 || currentCursor === 20) {
+            this.logger.info({
+                message: 'Finished syncing albums',
+                userId,
+                fetched: currentCursor,
             });
-        }
-
-        if (!hasNextPage) {
             await this.integrationRepo.updateLastSynced(providerName, providerAccountId, {
                 lastSyncedAt: new Date(Date.now()),
                 syncCursor: provider.getInitialCursor(),
@@ -152,8 +155,18 @@ class IntegrationService {
                         ? 'SUCCEEDWITHFAILURE'
                         : 'SUCCESS',
                 syncingTimestamp: null,
+                syncingId: null,
+            });
+            return false;
+        }
+
+        if (hasNextPage) {
+            await this.integrationRepo.updateLastSynced(providerName, providerAccountId, {
+                syncCursor,
+                hadFailuresInChain: hadFailuresBeforeThisPage || rejectedAlbums.length > 0,
             });
         }
+
         return hasNextPage;
     };
 

@@ -3,6 +3,7 @@ import AuthService from './AuthService.js';
 import COOKIE_OPTIONS from './utils/COOKIE_OPTIONS.js';
 import AuthError from './errors/AuthError.js';
 import type IntegrationService from '../integration/IntegrationService.js';
+import ValidationError from '../../shared/errors/ValidationError.js';
 
 class AuthController {
     private authService: AuthService;
@@ -48,7 +49,7 @@ class AuthController {
 
         return res
             .status(200)
-            .cookie('token', accessToken, COOKIE_OPTIONS(1000 * 30))
+            .cookie('token', accessToken, COOKIE_OPTIONS(1000 * 60 * 65))
             .cookie('refresh', refreshToken, COOKIE_OPTIONS(1000 * 60 * 60 * 24 * 7))
             .json({ status: 'success', message: 'Authorization refreshed' });
     };
@@ -69,7 +70,7 @@ class AuthController {
 
         return res
             .status(201)
-            .cookie('token', token, COOKIE_OPTIONS(1000 * 30))
+            .cookie('token', token, COOKIE_OPTIONS(1000 * 60 * 65))
             .cookie('refresh', refresh, COOKIE_OPTIONS(1000 * 60 * 60 * 24 * 30))
             .json({ status: 'success', message: 'guest created', guest: user });
     };
@@ -125,6 +126,24 @@ class AuthController {
         return res
             .status(200)
             .json({ status: 'success', message: 'Password changed, you may login now' });
+    };
+
+    setMainProvider = async (req: Request, res: Response) => {
+        const { accountId } = req.body;
+        const userId = req.userId;
+        console.log(accountId);
+        if (!userId) {
+            throw new AuthError(401, 'User is unauthorized');
+        }
+        if (!accountId) {
+            throw new ValidationError(404, 'account id was not found');
+        }
+
+        const mainProvider = await this.authService.setMainProvider(userId, accountId);
+
+        return res
+            .status(200)
+            .json({ status: 'success', message: 'Changed main provider', mainProvider });
     };
 }
 

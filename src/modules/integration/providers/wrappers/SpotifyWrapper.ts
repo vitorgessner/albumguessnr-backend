@@ -54,6 +54,7 @@ export class SpotifyWrapper implements IProviderConnector {
             expiresAt: this.account.expiresAt,
             accessToken: null,
             refreshToken: null,
+            syncingId: this.account.syncingId,
         };
     };
 
