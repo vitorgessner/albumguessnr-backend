@@ -1,6 +1,7 @@
 import { prisma } from '../../config/prisma';
 import { Prisma } from '../../generated/prisma/client';
 import { isToday } from '../../shared/utils/isToday';
+import { isYesterday } from '../../shared/utils/isYesterday';
 import { DailyError } from './errors/DailyError';
 
 export class DailyAlbumRepository {
@@ -30,6 +31,34 @@ export class DailyAlbumRepository {
 
         const dailyAlbum = newestDailyAlbums.find((album) => isToday(album.date));
         return dailyAlbum;
+    };
+
+    getYesterdaysAlbum = async () => {
+        const newestDailyAlbums = await prisma.dailyAlbum.findMany({
+            take: 10,
+            orderBy: {
+                date: 'desc',
+            },
+            include: {
+                album: {
+                    include: {
+                        artists: {
+                            include: {
+                                artist: true,
+                            },
+                        },
+                        genres: {
+                            include: {
+                                genre: true,
+                            },
+                        },
+                    },
+                },
+            },
+        });
+
+        const yesterdaysAlbum = newestDailyAlbums.find((album) => isYesterday(album.date));
+        return yesterdaysAlbum;
     };
 
     getLastTenDailyAlbums = async () => {
@@ -313,6 +342,17 @@ export class DailyAlbumRepository {
             },
             update: {
                 ...data,
+            },
+        });
+    };
+
+    resetStreak = async (userId: string) => {
+        return await prisma.userDailyAlbumOverallStatistics.update({
+            where: {
+                userId,
+            },
+            data: {
+                currentStreak: 0,
             },
         });
     };

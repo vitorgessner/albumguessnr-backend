@@ -402,6 +402,13 @@ class AuthService {
         return { token, refresh: refresh };
     };
 
+    houseKeepGuestsAndTokens = async () => {
+        const tokensDeleted = await this.authRepo.deleteReplacedAndExpiredTokens();
+        const guestsDeleted = await this.authRepo.deleteExpiredGuests();
+
+        return { tokensDeleted: tokensDeleted.count, guestsDeleted: guestsDeleted.count };
+    };
+
     private instantiateChildLogger = ({
         userId,
         email,

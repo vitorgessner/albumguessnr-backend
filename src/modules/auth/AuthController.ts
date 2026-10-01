@@ -2,15 +2,11 @@ import type { Request, Response } from 'express';
 import AuthService from './AuthService.js';
 import COOKIE_OPTIONS from './utils/COOKIE_OPTIONS.js';
 import AuthError from './errors/AuthError.js';
-import type IntegrationService from '../integration/IntegrationService.js';
 import ValidationError from '../../shared/errors/ValidationError.js';
 
 class AuthController {
-    private authService: AuthService;
-    private integrationService: IntegrationService;
-    constructor(authService: AuthService, integrationService: IntegrationService) {
+    constructor(private authService: AuthService) {
         this.authService = authService;
-        this.integrationService = integrationService;
     }
 
     getAllUsersWithProfile = async (req: Request, res: Response) => {
@@ -144,6 +140,17 @@ class AuthController {
         return res
             .status(200)
             .json({ status: 'success', message: 'Changed main provider', mainProvider });
+    };
+
+    houseKeepGuestsAndTokens = async (_: Request, res: Response) => {
+        const { guestsDeleted, tokensDeleted } = await this.authService.houseKeepGuestsAndTokens();
+
+        return res.status(200).json({
+            status: 'success',
+            message: 'Housekeeping made',
+            guestsDeleted,
+            tokensDeleted,
+        });
     };
 }
 

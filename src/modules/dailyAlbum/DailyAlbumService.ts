@@ -54,9 +54,6 @@ export class DailyAlbumService {
         const dailyAlbum = await this.dailyAlbumRepo.getDailyAlbum();
 
         if (!dailyAlbum) {
-            this.logger.error(
-                new DailyError(404, `It was not found a daily album from ${new Date()}`)
-            );
             throw new DailyError(404, `It was not found a daily album from ${new Date()}`);
         }
 
@@ -83,9 +80,6 @@ export class DailyAlbumService {
         const randomNumber = Math.floor(Math.random() * electableAlbums.count);
         const album = electableAlbums.electableAlbums.find((_, index) => index === randomNumber);
         if (!album) {
-            this.logger.error(
-                new DailyError(404, `Electable album was not found. Random Factor: ${randomNumber}`)
-            );
             throw new DailyError(
                 404,
                 `Electable album was not found. Random Factor: ${randomNumber}`
@@ -264,10 +258,31 @@ export class DailyAlbumService {
         return userDailyAlbumOverallStatistics;
     };
 
+    checkIfUserGuessedYesterdaysAlbum = async (userId: string) => {
+        const yesterdaysAlbum = await this.dailyAlbumRepo.getYesterdaysAlbum();
+        if (!yesterdaysAlbum) {
+            throw new DailyError(404, 'It was not found a daily album from yesterday');
+        }
+
+        const userStatistics = await this.dailyAlbumRepo.getUserDailyAlbumStatistics(
+            userId,
+            yesterdaysAlbum.albumId
+        );
+
+        if (!userStatistics || userStatistics.status === 'UNFINISHED') {
+            return false;
+        }
+
+        return true;
+    };
+
+    resetUserStreak = async (userId: string) => {
+        return await this.dailyAlbumRepo.resetStreak(userId);
+    };
+
     private getElectableDailyAlbums = async () => {
         const electableAlbums = await this.dailyAlbumRepo.getElectableDailyAlbums();
-        if (!electableAlbums) {
-            this.logger.warn('There are no more electable daily albums');
+        if (!electableAlbums || electableAlbums.length === 0) {
             throw new DailyError(404, 'There are no more electable daily albums');
         }
 

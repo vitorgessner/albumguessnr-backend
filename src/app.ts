@@ -69,8 +69,9 @@ import { albumRoutes } from './modules/album/albumRoutes.js';
 // eslint-disable-next-line max-len
 import { requireFullAccountMiddleware } from './modules/auth/middlewares/requireFullAccountMiddleware.js';
 import { optionalAuth } from './modules/auth/middlewares/optionalAuth.js';
-import { runDailyAlbumCron } from './shared/utils/dailyAlbumCron.js';
+import { runDailyAlbumCron } from './modules/dailyAlbum/crons/dailyAlbumCron.js';
 import cron from 'node-cron';
+import { runHousekeepingCron } from './modules/auth/crons/housekeepingCron.js';
 
 export const getApp = (): { app: Application; startConsumers: () => Promise<void> } => {
     const app = express();
@@ -116,7 +117,7 @@ export const getApp = (): { app: Application; startConsumers: () => Promise<void
 
     const authRepo = new AuthRepository(env.DEFAULT_AVATAR);
     const authService = new AuthService(authRepo, profileRepo, logger);
-    const authController = new AuthController(authService, integrationService);
+    const authController = new AuthController(authService);
 
     const providerRepo = new ProviderRepository();
     const providerService = new ProviderService(providerRepo);
@@ -164,11 +165,7 @@ export const getApp = (): { app: Application; startConsumers: () => Promise<void
         integrationService,
         logger
     );
-    const dailyAlbumController = new DailyAlbumController(
-        dailyAlbumService,
-        profileService,
-        authService
-    );
+    const dailyAlbumController = new DailyAlbumController(dailyAlbumService, authService, logger);
 
     app.use((req, res, next) => {
         res.set('Cache-Control', 'no-store');
@@ -228,6 +225,10 @@ export const getApp = (): { app: Application; startConsumers: () => Promise<void
     app.use('/daily', optionalAuth(authService), dailyAlbumRoutes(dailyAlbumController));
 
     cron.schedule('0 7 * * *', () => runDailyAlbumCron(), {
+        timezone: 'America/Sao_Paulo',
+    });
+
+    cron.schedule('0 23 * * *', () => runHousekeepingCron(), {
         timezone: 'America/Sao_Paulo',
     });
 

@@ -1,7 +1,7 @@
-import axiosInstance from '../../config/axios';
-import { logger } from '../../config/logger/logger';
-import { env } from '../config/env';
-import { sleep } from './sleep';
+import axiosInstance from '../../../config/axios';
+import { logger } from '../../../config/logger/logger';
+import { env } from '../../../shared/config/env';
+import { sleep } from '../../../shared/utils/sleep';
 
 export async function runDailyAlbumCron() {
     const MAX_CRON_RETRIES = 3;
@@ -16,7 +16,7 @@ export async function runDailyAlbumCron() {
             });
 
             logger.info(
-                `Cron executed with successfully at ${new Date().toISOString()}:`,
+                `Cron executed successfully at ${new Date().toISOString()}:`,
                 response.data
             );
             return;

@@ -70,6 +70,10 @@ const authRoutes = (controller: AuthController, authService: AuthService) => {
         (req: Request, res: Response) => controller.setMainProvider(req, res)
     );
 
+    router.delete('/housekeeping/guests', (req: Request, res: Response) =>
+        controller.houseKeepGuestsAndTokens(req, res)
+    );
+
     return router;
 };
 

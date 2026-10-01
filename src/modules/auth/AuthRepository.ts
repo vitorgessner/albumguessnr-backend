@@ -482,6 +482,49 @@ class AuthRepository {
             },
         });
     };
+
+    deleteReplacedAndExpiredTokens = async () => {
+        return await prisma.refreshToken.deleteMany({
+            where: {
+                OR: [
+                    {
+                        replacedByToken: {
+                            not: null,
+                        },
+                    },
+                    {
+                        expirationTime: {
+                            gte: new Date(),
+                        },
+                    },
+                ],
+            },
+        });
+    };
+
+    deleteExpiredGuests = async () => {
+        const guestsToDelete = await prisma.user.findMany({
+            where: {
+                isGuest: true,
+                refreshToken: {
+                    none: {},
+                },
+            },
+            select: { id: true },
+        });
+
+        if (guestsToDelete.length === 0) {
+            return { count: 0 };
+        }
+
+        return await prisma.user.deleteMany({
+            where: {
+                id: {
+                    in: guestsToDelete.map((user) => user.id),
+                },
+            },
+        });
+    };
 }
 
 export default AuthRepository;

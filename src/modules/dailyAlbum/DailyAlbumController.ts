@@ -1,17 +1,17 @@
+import winston from 'winston';
 import ValidationError from '../../shared/errors/ValidationError';
 import { sendMail } from '../../shared/utils/sendMail';
 import AuthService from '../auth/AuthService';
 import AuthError from '../auth/errors/AuthError';
 import COOKIE_OPTIONS from '../auth/utils/COOKIE_OPTIONS';
-import ProfileService from '../profile/ProfileService';
 import { DailyAlbumService } from './DailyAlbumService';
 import type { Request, Response } from 'express';
 
 export class DailyAlbumController {
     constructor(
         private dailyAlbumService: DailyAlbumService,
-        private profileService: ProfileService,
-        private authService: AuthService
+        private authService: AuthService,
+        private logger: winston.Logger
     ) {}
 
     getDailyAlbum = async (req: Request, res: Response) => {
@@ -56,6 +56,16 @@ export class DailyAlbumController {
 
         const { userDailyAlbumStatistics, totalGuesses } =
             await this.dailyAlbumService.getUserDailyAlbumStatistics(userId, albumId);
+
+        if (!(await this.dailyAlbumService.checkIfUserGuessedYesterdaysAlbum(userId))) {
+            if (!userDailyAlbumStatistics) {
+                await this.dailyAlbumService.resetUserStreak(userId);
+                this.logger.info({
+                    event: 'Reset daily album streak',
+                    user: userId,
+                });
+            }
+        }
 
         return res.status(200).json({
             status: 'success',
@@ -184,7 +194,7 @@ export class DailyAlbumController {
 
             `Daily album data from ${dateObj.toUTCString()}`,
             `
-            <p>Id: ${album.id}</p>x
+            <p>Id: ${album.id}</p>
             <p>title: ${album.normalizedName} (${album.name})</p>
             <p>Artists: ${artists}</p>
             <p>Genres: ${genres}</p>
