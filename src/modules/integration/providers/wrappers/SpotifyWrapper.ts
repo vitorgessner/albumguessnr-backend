@@ -17,7 +17,7 @@ import {
     ITopTracksResponse,
 } from '../interfaces/spotifyInterfaces';
 import { IMBAlbum } from '../interfaces/musicBrainzInterfaces';
-import { getApiInstances } from '../config/axiosInstances';
+import { getApiInstances, spRequest } from '../config/axiosInstances';
 import { sanitizeError } from '../../../../shared/utils/sanitizeCause';
 import { AlbumFormatResult } from '../interfaces/AlbumFormatResult';
 import IntegrationService from '../../IntegrationService';
@@ -25,6 +25,7 @@ import IntegrationService from '../../IntegrationService';
 export class SpotifyWrapper implements IProviderConnector {
     private spotifyAxios;
     private musicBrainzCache = new Map<string, IMBAlbum | undefined | unknown>();
+    private total: number = 1;
     constructor(
         private account: Account,
         private musicBrainz: MusicBrainzWrapper,
@@ -35,7 +36,23 @@ export class SpotifyWrapper implements IProviderConnector {
         this.logger = logger;
         const setup = getApiInstances();
         this.spotifyAxios = setup.spotifyAxios;
-        setup.setupSpotifyInterceptor(this.getAccount, this.integrationService.editTokens);
+        setup.setupSpotifyInterceptor(
+            this.getAccount,
+            async (provider, providerAccountId, tokens) => {
+                const updated = await this.integrationService.editTokens(
+                    provider,
+                    providerAccountId,
+                    tokens
+                );
+                this.account = {
+                    ...this.account,
+                    accessToken: updated.accessToken,
+                    refreshToken: updated.refreshToken,
+                    expiresAt: updated.expiresAt,
+                };
+                return updated;
+            }
+        );
     }
 
     getInitialCursor = (): number => 0;
@@ -66,22 +83,25 @@ export class SpotifyWrapper implements IProviderConnector {
         syncCursor: number;
     }> => {
         try {
-            const response = await this.spotifyAxios.get<ITopTracksResponse>('me/top/tracks', {
-                headers: {
-                    Authorization: `Bearer ${this.account.accessToken}`,
-                },
-                params: {
-                    offset: syncCursor,
-                    time_range: 'long_term',
-                    limit: 50,
-                },
-            });
+            const response = await spRequest(() =>
+                this.spotifyAxios.get<ITopTracksResponse>('me/top/tracks', {
+                    headers: {
+                        Authorization: `Bearer ${this.account.accessToken}`,
+                    },
+                    params: {
+                        offset: syncCursor,
+                        time_range: 'long_term',
+                        limit: 50,
+                    },
+                })
+            );
 
             const { total, items } = response.data;
+            this.total = total;
 
             const uniqueAlbums = this.deduplicateAlbums(items);
             const albums = await Promise.all(
-                uniqueAlbums.map((album, i) => this.formatAlbum(album, i + syncCursor + 1, total))
+                uniqueAlbums.map((album, i) => this.formatAlbum(album, i + syncCursor + 1))
             );
 
             return {
@@ -92,9 +112,9 @@ export class SpotifyWrapper implements IProviderConnector {
         } catch (err) {
             this.logger.error(`Failed to fetch albums on cursor ${syncCursor}`, err);
             return {
+                hasNextPage: syncCursor < this.total,
+                syncCursor: syncCursor + 50,
                 albums: [],
-                hasNextPage: false,
-                syncCursor: 0,
             };
         }
     };
@@ -108,13 +128,11 @@ export class SpotifyWrapper implements IProviderConnector {
 
     private formatAlbum = async (
         album: ISpotifyTopTrack,
-        i: number,
-        total: number
+        i: number
     ): Promise<AlbumFormatResult> => {
         try {
             const childLogger = this.instantiateChildLogger(this.userId, album);
             if (!album.images[0]) {
-                childLogger.error(new IntegrationError(404, 'Cover_url not found'));
                 throw new IntegrationError(404, 'Cover_url not found');
             }
 
@@ -132,7 +150,11 @@ export class SpotifyWrapper implements IProviderConnector {
             if (savedAlbum) {
                 await this.integrationService.syncAlbum(
                     this.userId,
-                    { details: savedAlbum, playcount: null, familiarityScore: 1 - i / total },
+                    {
+                        details: savedAlbum,
+                        playcount: null,
+                        familiarityScore: this.calculateFamiliarityScore(i),
+                    },
                     childLogger,
                     'spotify'
                 );
@@ -141,9 +163,9 @@ export class SpotifyWrapper implements IProviderConnector {
 
             const tracks = await this.fetchAlbumTracks(album.id, childLogger);
             const genres = await this.fetchAlbumTags(
-                normalizeAlbumName(album.name),
+                album.name,
                 childLogger,
-                normalizedArtists[0]?.normalizedName
+                normalizedArtists[0]?.name
             );
 
             const normalizedAlbum = {
@@ -157,7 +179,7 @@ export class SpotifyWrapper implements IProviderConnector {
                 tracks,
                 genres,
                 playcount: null,
-                familiarityScore: 1 - i / total,
+                familiarityScore: this.calculateFamiliarityScore(i),
             };
 
             return { status: 'to create', album: normalizedAlbum };
@@ -168,7 +190,7 @@ export class SpotifyWrapper implements IProviderConnector {
                 artist: album.artists.map((artist) => artist.name).join(', '),
                 normalizedAlbum:
                     normalizeAlbumName(album.name) +
-                    -' - ' +
+                    ' - ' +
                     album.artists.map((artist) => normalizeArtistName(artist.name)).join(', '),
             };
             return { status: 'failed', rawAlbum, error: err };
@@ -204,13 +226,12 @@ export class SpotifyWrapper implements IProviderConnector {
         childLogger: winston.Logger
     ): Promise<INormalizedTrack[]> => {
         try {
-            const response = await this.spotifyAxios.get<IAlbumTracksResponse>(
-                `albums/${id}/tracks`,
-                {
+            const response = await spRequest(() =>
+                this.spotifyAxios.get<IAlbumTracksResponse>(`albums/${id}/tracks`, {
                     headers: {
                         Authorization: `Bearer ${this.account.accessToken}`,
                     },
-                }
+                })
             );
 
             if (
@@ -219,7 +240,7 @@ export class SpotifyWrapper implements IProviderConnector {
                 !response.data.items ||
                 response.data.items.length <= 0
             ) {
-                childLogger.warn(new IntegrationError(404, 'Album returned no tracks'));
+                throw new IntegrationError(404, 'Album returned no tracks');
             }
 
             const tracks = response.data.items.map((item) => {
@@ -262,17 +283,43 @@ export class SpotifyWrapper implements IProviderConnector {
         artist: string,
         childLogger: winston.Logger
     ): Promise<IMBAlbum | undefined> => {
-        const cacheKey = `${artist.toLowerCase()}:${title.toLowerCase()}`;
+        const cacheKey = `${normalizeArtistName(artist)}:${normalizeAlbumName(title)}`;
 
         if (this.musicBrainzCache.has(cacheKey)) {
             const cached = this.musicBrainzCache.get(cacheKey);
-            if (cached instanceof Error) throw cached;
+            if (cached instanceof Error) {
+                await this.integrationService.saveFailedAlbumSync(
+                    {
+                        artist,
+                        mbid: null,
+                        name: title,
+                        normalizedAlbum: normalizeAlbumName(title),
+                    },
+                    this.userId,
+                    'spotify',
+                    childLogger,
+                    `Failed to fetch album from MusicBrainz. Error: ${cached.stack}`
+                );
+                throw cached;
+            }
             return cached as IMBAlbum | undefined;
         }
 
         try {
             const musicBrainzAlbum = await this.musicBrainz.fetchAlbum(title, artist);
             if (!musicBrainzAlbum) {
+                await this.integrationService.saveFailedAlbumSync(
+                    {
+                        artist,
+                        mbid: null,
+                        name: title,
+                        normalizedAlbum: normalizeAlbumName(title),
+                    },
+                    this.userId,
+                    'spotify',
+                    childLogger,
+                    'Album not found on MusicBrainz (impact year, tags and maybe artists)'
+                );
                 childLogger.warn(
                     new IntegrationError(404, 'Album not found on MusicBrainz (impact tags)')
                 );
@@ -282,6 +329,18 @@ export class SpotifyWrapper implements IProviderConnector {
             return musicBrainzAlbum;
         } catch (error) {
             this.musicBrainzCache.set(cacheKey, error);
+            await this.integrationService.saveFailedAlbumSync(
+                {
+                    artist,
+                    mbid: null,
+                    name: title,
+                    normalizedAlbum: normalizeAlbumName(title),
+                },
+                this.userId,
+                'spotify',
+                childLogger,
+                `Failed to fetch album from MusicBrainz. Error: ${error}`
+            );
             throw error;
         }
     };
@@ -292,5 +351,9 @@ export class SpotifyWrapper implements IProviderConnector {
             providerAccountId: this.account.providerAccountId,
             refreshToken: this.account.refreshToken,
         };
+    };
+
+    private calculateFamiliarityScore = (i: number) => {
+        return (Math.min(this.total, 500) - i) / Math.min(this.total, 500);
     };
 }

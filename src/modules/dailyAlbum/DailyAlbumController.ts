@@ -1,3 +1,4 @@
+/* eslint-disable max-len */
 import winston from 'winston';
 import ValidationError from '../../shared/errors/ValidationError';
 import { sendMail } from '../../shared/utils/sendMail';
@@ -188,6 +189,8 @@ export class DailyAlbumController {
         const genres = album.genres.map((genre) => genre.genre.name).join(', ');
 
         const dateObj = new Date(tomorrow);
+        const albumUrlName = album.normalizedName.split(' ').join('-');
+        const artistUrlName = album.artists[0]?.artist.normalizedName.split(' ').join('-');
 
         sendMail(
             'albumguessnr@gmail.com',
@@ -195,10 +198,11 @@ export class DailyAlbumController {
             `Daily album data from ${dateObj.toUTCString()}`,
             `
             <p>Id: ${album.id}</p>
-            <p>title: ${album.normalizedName} (${album.name})</p>
+            <p>Title: ${album.normalizedName} (${album.name})</p>
             <p>Artists: ${artists}</p>
             <p>Genres: ${genres}</p>
             <p>Cover: ${album.cover_url}</p>
+            <p>Rym url: <a href="https://rateyourmusic.com/release/album/${artistUrlName}/${albumUrlName}" target="_blank">https://rateyourmusic.com/release/album/${artistUrlName}/${albumUrlName}</a></p>
             <p>Descriptors: ${album.descriptors.join(', ')}</p>
             <p>Rym ranking: ${album.rymRanking?.toFixed(0)}</p>
             <p>Rym rating: ${album.rymRating?.toFixed(2)}</p>
@@ -210,7 +214,7 @@ export class DailyAlbumController {
 
         return res.status(200).json({
             status: 'success',
-            message: `Setted ${dateObj.toUTCString()} daily album`,
+            message: `Set ${dateObj.toUTCString()} daily album`,
             dailyAlbum,
         });
     };

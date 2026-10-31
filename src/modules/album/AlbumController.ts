@@ -10,8 +10,8 @@ export class AlbumController {
         if (!albumId || typeof albumId !== 'string') {
             throw new ValidationError(400, 'Album id was not provided or is invalid');
         }
-        const album = await this.albumService.getAlbum(albumId);
+        const { album, count } = await this.albumService.getAlbum(albumId);
 
-        return res.status(200).json({ status: 'success', message: 'fetched album', album });
+        return res.status(200).json({ status: 'success', message: 'fetched album', album, count });
     };
 }

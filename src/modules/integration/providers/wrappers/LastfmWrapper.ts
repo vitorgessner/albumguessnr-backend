@@ -13,7 +13,7 @@ import {
 import { MusicBrainzWrapper } from '../../utils/MusicBrainzWrapper';
 import { IAlbumInfo, ITopAlbumResponse, ITopAlbumsResponse } from '../interfaces/lastfmInterfaces';
 import { IMBAlbum } from '../interfaces/musicBrainzInterfaces';
-import { getApiInstances } from '../config/axiosInstances';
+import { getApiInstances, lfRequest } from '../config/axiosInstances';
 import { sanitizeError } from '../../../../shared/utils/sanitizeCause';
 import { AlbumFormatResult } from '../interfaces/AlbumFormatResult';
 import IntegrationService from '../../IntegrationService';
@@ -23,6 +23,8 @@ import AuthError from '../../../auth/errors/AuthError';
 
 export class LastfmWrapper implements IProviderConnector {
     private lastfmAxios;
+    private totalPages: number = 1;
+    private musicBrainzCache = new Map<string, IMBAlbum | undefined | unknown>();
     constructor(
         private account: Account,
         private musicBrainz: MusicBrainzWrapper,
@@ -62,9 +64,12 @@ export class LastfmWrapper implements IProviderConnector {
         hasNextPage: boolean;
         syncCursor: number;
     }> => {
-        const { totalPages, items, topPlaycount } = await this.fetchTopAlbums(syncCursor);
+        const { totalPages, items } = await this.fetchTopAlbums(syncCursor);
+        this.totalPages = totalPages;
 
-        const albums = await Promise.all(items.map((item) => this.formatAlbum(item, topPlaycount)));
+        const albums = await Promise.all(
+            items.map((item, i) => this.formatAlbum(item, i + (syncCursor - 1) * 50))
+        );
 
         return {
             hasNextPage: syncCursor <= totalPages,
@@ -86,35 +91,30 @@ export class LastfmWrapper implements IProviderConnector {
             `api_key${env.API_KEY}methoduser.gettopalbumspage${syncCursor}sk${this.account.accessToken}user${this.account.username}${env.LASTFM_CLIENT_SECRET}`
         );
 
-        const response = await this.lastfmAxios.get<ITopAlbumsResponse>('', {
-            params: {
-                method: 'user.gettopalbums',
-                api_sig: signature,
-                sk: this.account.accessToken,
-                user: this.account.username,
-                page: syncCursor,
-            },
-        });
+        const response = await lfRequest(() =>
+            this.lastfmAxios.get<ITopAlbumsResponse>('', {
+                params: {
+                    method: 'user.gettopalbums',
+                    api_sig: signature,
+                    sk: this.account.accessToken,
+                    user: this.account.username,
+                    page: syncCursor,
+                },
+            })
+        );
 
         const { total, totalPages } = response.data.topalbums['@attr'];
         const { album: items } = response.data.topalbums;
 
-        return { total, totalPages, items, topPlaycount: items[0]?.playcount };
+        return { total, totalPages, items };
     };
 
     private formatAlbum = async (
         album: ITopAlbumResponse,
-        topPlaycount: string | undefined
+        i: number
     ): Promise<AlbumFormatResult> => {
         try {
             const childLogger = this.instantiateChildLogger(this.userId, album);
-
-            if (!album.image || !album.image[0]) {
-                childLogger.error(new IntegrationError(404, 'Cover_url not found'));
-                throw new IntegrationError(404, 'Cover_url not found');
-            }
-
-            const cover_url = this.getCoverUrl(album, childLogger);
 
             const normalizedArtist = normalizeArtistName(album.artist.name);
             const normalizedTitle = normalizeAlbumName(album.name);
@@ -130,7 +130,7 @@ export class LastfmWrapper implements IProviderConnector {
                     {
                         details: savedAlbum,
                         playcount: Number(album.playcount),
-                        familiarityScore: Number(album.playcount) / Number(topPlaycount),
+                        familiarityScore: this.calculateFamiliarityScore(i),
                     },
                     childLogger,
                     'lastfm'
@@ -138,9 +138,28 @@ export class LastfmWrapper implements IProviderConnector {
                 return { status: 'synced' };
             }
 
+            if (!album.image || !album.image[0]) {
+                await this.integrationService.saveFailedAlbumSync(
+                    {
+                        artist: album.artist.name,
+                        name: album.name,
+                        mbid: album.mbid,
+                        normalizedAlbum: normalizeAlbumName(album.name),
+                    },
+                    this.userId,
+                    'lastfm',
+                    childLogger,
+                    'Album returned no cover image'
+                );
+                throw new IntegrationError(404, 'Cover_url not found');
+            }
+
+            const cover_url = this.getCoverUrl(album);
+
             const musicBrainzAlbum = await this.fetchMusicBrainzAlbum(
-                normalizedTitle,
-                normalizedArtist
+                album.name,
+                album.artist.name,
+                childLogger
             );
 
             const hasNormalizedArtists = await this.normalizeArtists(musicBrainzAlbum);
@@ -172,7 +191,7 @@ export class LastfmWrapper implements IProviderConnector {
                     {
                         details: savedAlbumAfterMusicBrainz,
                         playcount: Number(album.playcount),
-                        familiarityScore: Number(album.playcount) / Number(topPlaycount),
+                        familiarityScore: this.calculateFamiliarityScore(i),
                     },
                     childLogger,
                     'lastfm'
@@ -180,7 +199,7 @@ export class LastfmWrapper implements IProviderConnector {
                 return { status: 'synced' };
             }
 
-            const info = album.mbid
+            const lastfmAlbumInfo = album.mbid
                 ? await this.fetchInfoWithMbid(album.mbid, childLogger)
                 : await this.fetchInfoWithAlbumData(
                       normalizeAlbumName(album.name),
@@ -188,8 +207,12 @@ export class LastfmWrapper implements IProviderConnector {
                       childLogger
                   );
 
-            const tracks = await this.fetchAlbumTracks(info, childLogger);
-            const genres = await this.fetchAlbumTags(musicBrainzAlbum, info, childLogger);
+            const tracks = await this.fetchAlbumTracks(lastfmAlbumInfo, childLogger);
+            const genres = await this.fetchAlbumTags(
+                musicBrainzAlbum,
+                lastfmAlbumInfo,
+                childLogger
+            );
 
             const year = musicBrainzAlbum ? this.getMusicBrainzAlbumYear(musicBrainzAlbum) : null;
 
@@ -204,7 +227,7 @@ export class LastfmWrapper implements IProviderConnector {
                 tracks,
                 genres,
                 playcount: Number(album.playcount),
-                familiarityScore: Number(album.playcount) / Number(topPlaycount),
+                familiarityScore: this.calculateFamiliarityScore(i),
             };
 
             return { status: 'to create', album: normalizedAlbum };
@@ -212,6 +235,7 @@ export class LastfmWrapper implements IProviderConnector {
             const rawAlbum = {
                 name: album.name,
                 mbid: album.mbid,
+                albumId: null,
                 artist: album.artist.name,
                 normalizedAlbum:
                     normalizeAlbumName(album.name) + ' - ' + normalizeArtistName(album.artist.name),
@@ -220,10 +244,9 @@ export class LastfmWrapper implements IProviderConnector {
         }
     };
 
-    getCoverUrl = (album: ITopAlbumResponse | IAlbumInfo, logger?: winston.Logger): string => {
+    getCoverUrl = (album: ITopAlbumResponse | IAlbumInfo): string => {
         const cover_url = album.image[album.image.length - 1]?.['#text'];
         if (!cover_url) {
-            logger?.error(new IntegrationError(404, 'Cover_url not found'));
             throw new IntegrationError(404, 'Cover_url not found');
         }
 
@@ -232,27 +255,68 @@ export class LastfmWrapper implements IProviderConnector {
 
     private fetchMusicBrainzAlbum = async (
         title: string,
-        artist: string
+        artist: string,
+        logger: winston.Logger
     ): Promise<IMBAlbum | undefined> => {
+        const cacheKey = `${normalizeArtistName(artist)}:${normalizeAlbumName(title)}`;
+
+        if (this.musicBrainzCache.has(cacheKey)) {
+            const cached = this.musicBrainzCache.get(cacheKey);
+            if (cached instanceof Error) {
+                await this.integrationService.saveFailedAlbumSync(
+                    {
+                        artist,
+                        mbid: null,
+                        name: title,
+                        normalizedAlbum: normalizeAlbumName(title),
+                    },
+                    this.userId,
+                    'lastfm',
+                    logger,
+                    `Failed to fetch album from MusicBrainz. Error: ${cached.stack}`
+                );
+                throw cached;
+            }
+            return cached as IMBAlbum | undefined;
+        }
+
         try {
             const musicBrainzAlbum = await this.musicBrainz.fetchAlbum(title, artist);
             if (!musicBrainzAlbum) {
-                this.logger.warn(
-                    new IntegrationError(
-                        404,
-                        'Album not found on MusicBrainz (impact year, tags and maybe artists)'
-                    )
+                await this.integrationService.saveFailedAlbumSync(
+                    {
+                        artist,
+                        mbid: null,
+                        name: title,
+                        normalizedAlbum: title,
+                    },
+                    this.userId,
+                    'lastfm',
+                    logger,
+                    'Album not found on MusicBrainz (impact year, tags and maybe artists)'
+                );
+                logger.warn(
+                    new IntegrationError(404, 'Album not found on MusicBrainz (impact tags)')
                 );
             }
 
+            this.musicBrainzCache.set(cacheKey, musicBrainzAlbum);
             return musicBrainzAlbum;
-        } catch (err) {
-            this.logger.error(
-                new IntegrationError(500, 'Failed to fetch album from MuscBrainz', {
-                    cause: sanitizeError(err),
-                })
+        } catch (error) {
+            this.musicBrainzCache.set(cacheKey, error);
+            await this.integrationService.saveFailedAlbumSync(
+                {
+                    artist,
+                    mbid: null,
+                    name: title,
+                    normalizedAlbum: title,
+                },
+                this.userId,
+                'lastfm',
+                logger,
+                `Failed to fetch album from MusicBrainz. Error: ${error}`
             );
-            return;
+            throw error;
         }
     };
 
@@ -337,30 +401,29 @@ export class LastfmWrapper implements IProviderConnector {
                 `album${trimmedAlbum}api_key${env.API_KEY}artist${trimmedArtist}methodalbum.getinfosk${this.account.accessToken}${env.LASTFM_CLIENT_SECRET}`
             );
 
-            const response = await this.lastfmAxios.get('', {
-                params: {
-                    method: 'album.getinfo',
-                    api_sig: signature,
-                    sk: this.account.accessToken,
-                    album: trimmedAlbum,
-                    artist: trimmedArtist,
-                },
-            });
+            const response = await lfRequest(() =>
+                this.lastfmAxios.get('', {
+                    params: {
+                        method: 'album.getinfo',
+                        api_sig: signature,
+                        sk: this.account.accessToken,
+                        album: trimmedAlbum,
+                        artist: trimmedArtist,
+                    },
+                })
+            );
 
-            const info: IAlbumInfo = response.data.album;
+            const lastfmAlbumInfo: IAlbumInfo = response.data.album;
 
-            if (!info) {
+            if (!lastfmAlbumInfo) {
                 logger?.warn(new IntegrationError(404, 'No info found on lastfm'));
             }
 
-            return info;
+            return lastfmAlbumInfo;
         } catch (err) {
-            logger?.error(
-                new IntegrationError(500, 'Failed to fetch albums tracks', {
-                    cause: sanitizeError(err),
-                })
-            );
-            return undefined;
+            throw new IntegrationError(500, 'Failed to fetch albums tracks', {
+                cause: sanitizeError(err),
+            });
         }
     };
 
@@ -381,18 +444,20 @@ export class LastfmWrapper implements IProviderConnector {
                 `api_key${env.API_KEY}mbid${mbid}methodalbum.getinfosk${this.account.accessToken}${env.LASTFM_CLIENT_SECRET}`
             );
 
-            const response = await this.lastfmAxios.get('', {
-                params: {
-                    method: 'album.getinfo',
-                    api_sig: signature,
-                    sk: this.account.accessToken,
-                    mbid,
-                },
-            });
+            const response = await lfRequest(() =>
+                this.lastfmAxios.get('', {
+                    params: {
+                        method: 'album.getinfo',
+                        api_sig: signature,
+                        sk: this.account.accessToken,
+                        mbid,
+                    },
+                })
+            );
 
-            const info: IAlbumInfo = response.data.album;
+            const lastfmAlbumInfo: IAlbumInfo = response.data.album;
 
-            return info;
+            return lastfmAlbumInfo;
         } catch (err) {
             logger.error(
                 new IntegrationError(500, 'Failed to fetch albums tracks', {
@@ -405,10 +470,10 @@ export class LastfmWrapper implements IProviderConnector {
 
     private fetchAlbumTags = async (
         album: IMBAlbum | undefined,
-        info: IAlbumInfo | undefined,
+        lastfmAlbumInfo: IAlbumInfo | undefined,
         logger: winston.Logger
     ): Promise<INormalizedTag[]> => {
-        if (!album && !info) {
+        if (!album && !lastfmAlbumInfo) {
             return [];
         }
 
@@ -418,16 +483,26 @@ export class LastfmWrapper implements IProviderConnector {
             });
         }
 
-        if (info && info.tags && info.tags.tag && Array.isArray(info.tags.tag)) {
-            return info.tags.tag.map((tag) => {
+        if (
+            lastfmAlbumInfo &&
+            lastfmAlbumInfo.tags &&
+            lastfmAlbumInfo.tags.tag &&
+            Array.isArray(lastfmAlbumInfo.tags.tag)
+        ) {
+            return lastfmAlbumInfo.tags.tag.map((tag) => {
                 return { name: normalizeTagName(tag.name) };
             });
         }
 
-        if (info && info.tags && info.tags.tag && !Array.isArray(info.tags.tag)) {
+        if (
+            lastfmAlbumInfo &&
+            lastfmAlbumInfo.tags &&
+            lastfmAlbumInfo.tags.tag &&
+            !Array.isArray(lastfmAlbumInfo.tags.tag)
+        ) {
             return [
                 {
-                    name: normalizeTagName(info.tags.tag.name),
+                    name: normalizeTagName(lastfmAlbumInfo.tags.tag.name),
                 },
             ];
         }
@@ -445,5 +520,9 @@ export class LastfmWrapper implements IProviderConnector {
             providerAccountId: this.account.providerAccountId,
             refreshToken: this.account.refreshToken,
         };
+    };
+
+    private calculateFamiliarityScore = (i: number) => {
+        return (Math.min(this.totalPages * 50, 500) - i) / Math.min(this.totalPages * 50, 500);
     };
 }

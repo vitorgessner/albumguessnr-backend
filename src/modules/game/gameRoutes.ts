@@ -4,7 +4,7 @@ const gameRoutes = () => {
     const router = Router();
 
     router.get('/', (req: Request, res: Response) => {
-        res.json({ message: 'aoba' });
+        res.json({ status: 'success' });
     });
 
     return router;

@@ -11,7 +11,8 @@ import AuthError from '../auth/errors/AuthError.js';
 import type { IAlbumInfo } from './providers/interfaces/lastfmInterfaces.js';
 import type { AxiosInstance } from 'axios';
 import { ITopAlbumResponse } from './providers/interfaces/lastfmInterfaces.js';
-import * as crypto from 'node:crypto';
+import { pickAlbumIds } from './utils/pickAlbums.js';
+import { lfRequest } from './providers/config/axiosInstances.js';
 
 const apiMap: Record<string, PossibleApis> = {
     spotify: 'SPOTIFY',
@@ -30,6 +31,23 @@ class IntegrationService {
         const album = await this.albumRepo.getByTitleAndArtist(title, artist);
 
         return album;
+    };
+
+    findLastSyncedAt = async (userId: string) => {
+        const providers = await this.integrationRepo.findProviders(userId);
+        if (!providers || providers.accounts.length < 1) {
+            throw new AuthError(404, 'User does not have a provider connected');
+        }
+
+        return providers.accounts
+            .filter((account) => account.lastSyncedAt)
+            .sort((a, b) => {
+                if (a.lastSyncedAt && b.lastSyncedAt) {
+                    return new Date(b.lastSyncedAt).getTime() - new Date(a.lastSyncedAt).getTime();
+                }
+
+                return 1;
+            })[0]?.lastSyncedAt;
     };
 
     findMainProvider = async (userId: string) => {
@@ -71,13 +89,12 @@ class IntegrationService {
                 syncStatus: 'SYNCING',
                 syncingTimestamp: new Date(Date.now()),
                 hadFailuresInChain: false,
-                syncingId: crypto.randomUUID(),
             });
         }
 
         const { albums, syncCursor, hasNextPage } = await provider.fetchAlbums(currentCursor);
 
-        const fullfilledAlbums = albums
+        const fulfilled = albums
             .filter((album) => album.status === 'to create')
             .map((album) => album.album);
 
@@ -96,7 +113,7 @@ class IntegrationService {
         );
 
         await Promise.all(
-            fullfilledAlbums.map(async (album) => {
+            fulfilled.map(async (album) => {
                 const childLogger = this.instantiateChildLogger(userId, album);
 
                 const failedAlbumData = {
@@ -126,22 +143,12 @@ class IntegrationService {
                     );
                 }
 
-                if (!album.year) {
-                    await this.saveFailedAlbumSync(
-                        failedAlbumData,
-                        userId,
-                        providerName,
-                        childLogger,
-                        'Album returned no year'
-                    );
-                }
-
                 console.log('syncing: ' + album.normalizedName + ' - ' + album.normalizedArtist);
                 await this.createAndSyncNewAlbum(album, childLogger, userId, providerName);
             })
         );
 
-        if (!hasNextPage || currentCursor === 1000 || currentCursor === 20) {
+        if (!hasNextPage || currentCursor === 450 || currentCursor === 10) {
             this.logger.info({
                 message: 'Finished syncing albums',
                 userId,
@@ -170,17 +177,20 @@ class IntegrationService {
         return hasNextPage;
     };
 
-    getAlbums = async (id: string) => {
+    getAlbums = async (id: string, total = 10, excludeIds: string[] = []) => {
         const user = await this.profileRepo.findByUserId(id);
         if (!user) throw new IntegrationError(404, 'User not found');
 
-        const userAlbumsQtd = await this.integrationRepo.countUserAlbums(user.userId);
+        const all = await this.integrationRepo.findScores(user.userId);
+        const exclude = new Set(excludeIds);
+        let candidates = all.filter((a) => !exclude.has(a.albumId));
+        if (candidates.length < total) candidates = all;
 
-        const rand = userAlbumsQtd < 50 ? 0 : Math.floor(Math.random() * (userAlbumsQtd - 50));
+        const ids = pickAlbumIds(candidates, total);
+        const albums = await this.integrationRepo.findAlbumsByIds(user.userId, ids);
 
-        const albums = await this.integrationRepo.findAlbums(user.userId, rand);
-
-        return albums;
+        const byId = new Map(albums.map((a) => [a.albumId, a]));
+        return ids.map((i) => byId.get(i)!).filter(Boolean);
     };
 
     editTokens = async (
@@ -238,13 +248,15 @@ class IntegrationService {
             const trimmedAlbum = name.trim();
             const trimmedArtist = artist.trim();
 
-            const response = await lastfmAxios.get('', {
-                params: {
-                    method: 'album.getinfo',
-                    album: trimmedAlbum,
-                    artist: trimmedArtist,
-                },
-            });
+            const response = await lfRequest(() =>
+                lastfmAxios.get('', {
+                    params: {
+                        method: 'album.getinfo',
+                        album: trimmedAlbum,
+                        artist: trimmedArtist,
+                    },
+                })
+            );
 
             const info: IAlbumInfo = response.data.album;
 
@@ -285,8 +297,8 @@ class IntegrationService {
         logger: winston.Logger,
         err: unknown
     ) => {
-        logger.error(new IntegrationError(500, 'Failed album sync'));
         try {
+            logger.info(`Saving ${album.name} to failedAlbumsSync`);
             await this.integrationRepo.saveFailedSync({
                 albumName: album.name,
                 apiError: apiMap[apiError] ?? 'SERVER',

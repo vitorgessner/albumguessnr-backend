@@ -3,14 +3,27 @@ import type IntegrationService from '../../integration/IntegrationService.js';
 import AuthError from '../../auth/errors/AuthError.js';
 import { logger } from '../../../config/logger/logger.js';
 import { getRabbitChannel } from '../../../config/rabbitmq.js';
+import { ProviderService } from '../../integration/providers/ProviderService.js';
 
-const syncMiddleware = (integrationService: IntegrationService) => {
+const syncMiddleware = (
+    integrationService: IntegrationService,
+    providerService: ProviderService
+) => {
     return async (req: Request, res: Response, next: NextFunction) => {
         try {
             const userId = req.userId;
             if (!userId) throw new AuthError(401, 'Unauthorized');
 
             const mainProvider = await integrationService.findMainProvider(userId);
+            const lastSyncedAt = await integrationService.findLastSyncedAt(userId);
+            if (getDaysUntilNextSync(lastSyncedAt) > 0) {
+                logger.warn({
+                    userId: req.userId,
+                    nextSyncIn: getDaysUntilNextSync(lastSyncedAt) + ' days',
+                });
+                return next();
+            }
+            let syncingId = mainProvider.syncingId;
 
             const channel = getRabbitChannel();
 
@@ -21,11 +34,20 @@ const syncMiddleware = (integrationService: IntegrationService) => {
             );
 
             const exchange = 'syncing_providers';
+
+            if (!syncingId) {
+                syncingId = await getSyncingId(
+                    providerService,
+                    mainProvider.provider,
+                    mainProvider.providerAccountId
+                );
+            }
+
             const message = Buffer.from(
                 JSON.stringify({
                     userId,
                     providerAccountId: mainProvider.providerAccountId,
-                    syncingId: mainProvider.syncingId,
+                    syncingId: syncingId,
                 })
             );
 
@@ -47,6 +69,23 @@ const syncMiddleware = (integrationService: IntegrationService) => {
             return next(err);
         }
     };
+};
+
+const getDaysUntilNextSync = (lastSyncedAt?: Date | null) => {
+    return Math.ceil(
+        28 -
+            (new Date().getTime() / (1000 * 60 * 60 * 24) -
+                (lastSyncedAt?.getTime() ?? 0) / (1000 * 60 * 60 * 24))
+    );
+};
+
+const getSyncingId = async (
+    providerService: ProviderService,
+    provider: string,
+    providerAccountId: string
+) => {
+    const providerWithSyncingId = await providerService.setSyncingId(provider, providerAccountId);
+    return providerWithSyncingId.syncingId;
 };
 
 export default syncMiddleware;

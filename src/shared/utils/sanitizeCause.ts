@@ -22,7 +22,6 @@ export const sanitizeError = (err: unknown): SanitizedError => {
         return {
             message: err.message,
             status: err.response?.status,
-            params: err.config?.params,
             data: JSON.stringify(err.response?.data),
         };
     }

@@ -72,6 +72,10 @@ import { optionalAuth } from './modules/auth/middlewares/optionalAuth.js';
 import { runDailyAlbumCron } from './modules/dailyAlbum/crons/dailyAlbumCron.js';
 import cron from 'node-cron';
 import { runHousekeepingCron } from './modules/auth/crons/housekeepingCron.js';
+import { analyticsRoutes } from './modules/analytics/analyticsRoutes.js';
+import { AnalyticsRepository } from './modules/analytics/AnalyticsRepository.js';
+import { AnalyticsService } from './modules/analytics/AnalyticsService.js';
+import { AnalyticsController } from './modules/analytics/AnalyticsController.js';
 
 export const getApp = (): { app: Application; startConsumers: () => Promise<void> } => {
     const app = express();
@@ -99,12 +103,7 @@ export const getApp = (): { app: Application; startConsumers: () => Promise<void
 
     const transactionRepo = new TransactionRepository();
     const albumRepo = new AlbumRepository();
-    const albumService = new AlbumService(albumRepo);
-    const albumController = new AlbumController(albumService);
-
     const profileRepo = new ProfileRepository();
-    const profileService = new ProfileService(profileRepo, logger, supabase);
-    const profileController = new ProfileController(profileService);
 
     const integrationRepo = new IntegrationRepository();
     const integrationService = new IntegrationService(
@@ -113,11 +112,22 @@ export const getApp = (): { app: Application; startConsumers: () => Promise<void
         profileRepo,
         logger
     );
-    const integrationController = new IntegrationController(integrationService);
 
-    const authRepo = new AuthRepository(env.DEFAULT_AVATAR);
-    const authService = new AuthService(authRepo, profileRepo, logger);
-    const authController = new AuthController(authService);
+    const dailyAlbumRepo = new DailyAlbumRepository();
+    const dailyAlbumService = new DailyAlbumService(
+        dailyAlbumRepo,
+        albumRepo,
+        integrationService,
+        logger
+    );
+
+    const albumService = new AlbumService(albumRepo, dailyAlbumService);
+    const albumController = new AlbumController(albumService);
+
+    const profileService = new ProfileService(profileRepo, logger, supabase);
+    const profileController = new ProfileController(profileService);
+
+    const integrationController = new IntegrationController(integrationService);
 
     const providerRepo = new ProviderRepository();
     const providerService = new ProviderService(providerRepo);
@@ -158,14 +168,15 @@ export const getApp = (): { app: Application; startConsumers: () => Promise<void
 
     const wrapperFactory = new WrapperFactory(logger, integrationService);
 
-    const dailyAlbumRepo = new DailyAlbumRepository();
-    const dailyAlbumService = new DailyAlbumService(
-        dailyAlbumRepo,
-        albumRepo,
-        integrationService,
-        logger
-    );
+    const authRepo = new AuthRepository(env.DEFAULT_AVATAR);
+    const authService = new AuthService(authRepo, dailyAlbumRepo, logger);
+    const authController = new AuthController(authService);
+
     const dailyAlbumController = new DailyAlbumController(dailyAlbumService, authService, logger);
+
+    const analyticsRepo = new AnalyticsRepository();
+    const analyticsService = new AnalyticsService(analyticsRepo);
+    const analyticsController = new AnalyticsController(analyticsService);
 
     app.use((req, res, next) => {
         res.set('Cache-Control', 'no-store');
@@ -192,10 +203,10 @@ export const getApp = (): { app: Application; startConsumers: () => Promise<void
     );
 
     app.use(
-        '/game',
+        '/sync',
         authMiddleware,
         requireFullAccountMiddleware,
-        syncMiddleware(integrationService),
+        syncMiddleware(integrationService, providerService),
         gameRoutes()
     );
     app.use('/guess', authMiddleware, requireFullAccountMiddleware, guessRoutes(guessController));
@@ -224,6 +235,8 @@ export const getApp = (): { app: Application; startConsumers: () => Promise<void
 
     app.use('/daily', optionalAuth(authService), dailyAlbumRoutes(dailyAlbumController));
 
+    app.use('/metrics', analyticsRoutes(analyticsController));
+
     cron.schedule('0 7 * * *', () => runDailyAlbumCron(), {
         timezone: 'America/Sao_Paulo',
     });
@@ -231,8 +244,6 @@ export const getApp = (): { app: Application; startConsumers: () => Promise<void
     cron.schedule('0 23 * * *', () => runHousekeepingCron(), {
         timezone: 'America/Sao_Paulo',
     });
-
-    app.use(globalErrorMiddleware);
 
     const startConsumers = async () => {
         await Promise.all([
@@ -247,6 +258,8 @@ export const getApp = (): { app: Application; startConsumers: () => Promise<void
             lastfmConsumer('sync.lastfm.continuation', integrationService, wrapperFactory, logger),
         ]);
     };
+
+    app.use(globalErrorMiddleware);
 
     return { app, startConsumers };
 };

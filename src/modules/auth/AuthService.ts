@@ -7,18 +7,20 @@ import AuthError from './errors/AuthError.js';
 import type { UserCreateInput } from '../../generated/prisma/models.js';
 import { env } from '../../shared/config/env.js';
 import type { AccountCreateInputWithUser, IUserWithUsername } from './types/user.js';
-import ProfileRepository from '../profile/ProfileRepository.js';
 import winston from 'winston';
 import { sanitizeError } from '../../shared/utils/sanitizeCause.js';
 import { buildEmailTemplate } from './utils/buildEmail.js';
 import { Profile } from 'passport-google-oauth20';
 import { sendMail } from '../../shared/utils/sendMail.js';
 import * as crypto from 'node:crypto';
+import { DailyAlbumRepository } from '../dailyAlbum/DailyAlbumRepository.js';
+import { logger } from '../../config/logger/logger.js';
+import { isToday } from '../../shared/utils/isToday.js';
 
 class AuthService {
     constructor(
         private authRepo: AuthRepository,
-        private profileRepo: ProfileRepository,
+        private dailyAlbumRepo: DailyAlbumRepository,
         private logger: winston.Logger
     ) {}
 
@@ -49,6 +51,10 @@ class AuthService {
             me.userStats.totalScore = Math.round(me.userStats?.totalScore / 100);
         }
 
+        if (me) {
+            await this.updateGuestExpirationTime(me.id);
+        }
+
         return me;
     };
 
@@ -57,13 +63,11 @@ class AuthService {
         const validUser = await this.validatePassword(user, password);
 
         await this.authRepo.deleteRefreshTokensViaId(validUser.id);
-        const refreshToken = this.generateToken();
-        const hashRefresh = crypto.createHash('sha256').update(refreshToken).digest('hex');
-        await this.authRepo.createRefreshToken(hashRefresh, validUser.id);
+        const { token, refresh } = await this.generateTokens(user.id, user.isGuest);
 
-        const token = this.generateJwtToken(validUser.id, validUser.isGuest);
+        await this.emitLoginEvent(user.id);
 
-        return { token, refresh: refreshToken, username: validUser.profile?.username };
+        return { token, refresh, username: validUser.profile?.username };
     };
 
     oAuthLogin = async (profile: Profile, userId?: string) => {
@@ -91,12 +95,12 @@ class AuthService {
 
         if (existingUser && existingUser.emailVerified) {
             const newUser = await this.authRepo.upsertUserWithAccount(user, account, userId);
-            console.log('newUser', newUser);
 
             if (!newUser) {
                 return new Error('Failed to login with google');
             }
 
+            await this.emitLoginEvent(newUser.id);
             return newUser;
         }
 
@@ -110,6 +114,7 @@ class AuthService {
             return new Error('Failed to login with google');
         }
 
+        await this.emitLoginEvent(newUser.id);
         return newUser;
     };
 
@@ -138,23 +143,36 @@ class AuthService {
                     new AuthError(500, 'Failed to send email', { cause: sanitizeError(err) })
                 )
             );
-            return { status: 'success', user: user };
+            return { status: 'success', user };
         }
 
         if (user && !password) {
-            return { status: 'success', user: user };
+            return { status: 'success', user };
         }
 
         if (!password) {
-            const newUserInput = this.generateUser(email, null, true, userId);
-            const newUser = await this.authRepo.create(newUserInput);
+            const {
+                newUser: generatedUser,
+                dailyAlbumGuesses,
+                userDailyAlbumOverallStatistics,
+            } = await this.generateUser(email, null, true, userId);
+            const newUser = await this.authRepo.create(
+                generatedUser,
+                dailyAlbumGuesses,
+                userDailyAlbumOverallStatistics
+            );
             return { status: newUser ? 'success' : 'error', user: newUser };
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
-        const newUser = this.generateUser(email, hashedPassword, false, userId);
+        const { newUser, dailyAlbumGuesses, userDailyAlbumOverallStatistics } =
+            await this.generateUser(email, hashedPassword, false, userId);
 
-        const createdUser = await this.authRepo.create(newUser);
+        const createdUser = await this.authRepo.create(
+            newUser,
+            dailyAlbumGuesses,
+            userDailyAlbumOverallStatistics
+        );
 
         await this.sendTokenToEmail(email);
 
@@ -242,23 +260,24 @@ class AuthService {
 
     editPassword = async (passwordResetToken: string, password: string) => {
         if (!passwordResetToken) throw new ValidationError(400, 'Token should be provided');
-        const verificationToken = await this.authRepo.findByToken(passwordResetToken);
+        const verificationModel =
+            await this.authRepo.findVerificationModelByToken(passwordResetToken);
 
-        if (!verificationToken) {
+        if (!verificationModel) {
             throw new AuthError(404, 'Token not found');
         }
 
-        if (verificationToken.expirationTime.getTime() < new Date(Date.now()).getTime()) {
+        if (verificationModel.expirationTime.getTime() < new Date(Date.now()).getTime()) {
             throw new AuthError(401, 'Token expired');
         }
 
-        if (!verificationToken.user.emailVerified || !verificationToken.user.email) {
+        if (!verificationModel.user.emailVerified || !verificationModel.user.email) {
             throw new AuthError(401, 'Email is not verified or user is not logged in');
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
         const response = await this.authRepo.editPassword(
-            verificationToken.user.email,
+            verificationModel.user.email,
             hashedPassword
         );
         await this.authRepo.deleteVerificationToken(passwordResetToken);
@@ -290,39 +309,37 @@ class AuthService {
     };
 
     verifyEmail = async (userVerificationToken: string) => {
-        const verificationToken = await this.authRepo.findByToken(userVerificationToken);
+        const verificationModel =
+            await this.authRepo.findVerificationModelByToken(userVerificationToken);
 
-        if (!verificationToken) {
+        if (!verificationModel) {
             throw new AuthError(404, 'Token not found');
         }
 
-        if (verificationToken.expirationTime.getTime() < new Date(Date.now()).getTime()) {
+        if (verificationModel.expirationTime.getTime() < new Date(Date.now()).getTime()) {
             throw new AuthError(401, 'Token expired');
         }
 
-        if (!verificationToken.user.email) {
+        if (!verificationModel.user.email) {
             throw new AuthError(401, 'User is not logged in');
         }
 
         const validUser = await this.authRepo.verifyEmail(
-            verificationToken.user.email,
-            verificationToken.token
+            verificationModel.user.email,
+            verificationModel.token
         );
 
-        const token = this.generateJwtToken(validUser.id, validUser.isGuest);
-
-        const user = await this.authRepo.findByIdWithProfileAndAccounts(verificationToken.user.id);
+        const user = await this.authRepo.findByIdWithProfileAndAccounts(verificationModel.user.id);
         if (!user) throw new AuthError(404, 'user does not exists');
 
-        const refreshToken = this.generateToken();
-        const refresh = await this.authRepo.createRefreshToken(
-            refreshToken,
-            verificationToken.user.email
+        const { token, refresh } = await this.generateTokens(
+            verificationModel.userId,
+            verificationModel.user.isGuest
         );
 
         return {
             token,
-            refresh: refresh.token,
+            refresh,
             username: user?.profile?.username,
             id: validUser.id,
         };
@@ -330,76 +347,99 @@ class AuthService {
 
     refresh = async (token: string) => {
         const hashToken = crypto.createHash('sha256').update(token).digest('hex');
-        const refreshToken = await this.authRepo.findRefreshToken(hashToken);
-        if (!refreshToken) throw new AuthError(401, 'Token not found');
+        const refreshModel = await this.authRepo.findRefreshModel(hashToken);
+        if (!refreshModel) throw new AuthError(401, 'Token not found');
 
-        if (refreshToken.expirationTime.getTime() < new Date(Date.now()).getTime()) {
+        if (refreshModel.expirationTime.getTime() < new Date(Date.now()).getTime()) {
             throw new AuthError(401, 'Token expired');
         }
 
-        if (!refreshToken.user.isGuest && !refreshToken.user.email) {
+        if (!refreshModel.user.isGuest && !refreshModel.user.email) {
             throw new AuthError(401, 'User is not logged in');
         }
 
-        if (!refreshToken.replacedByToken) {
-            const newRefreshToken = this.generateToken();
-            const hashRefreshToken = crypto
-                .createHash('sha256')
-                .update(newRefreshToken)
-                .digest('hex');
-            const refresh = await this.authRepo.createRefreshToken(
-                hashRefreshToken,
-                refreshToken.user.id
+        if (!refreshModel.replacedByToken) {
+            const { token, refresh, hashRefreshToken } = await this.generateTokens(
+                refreshModel.userId,
+                refreshModel.user.isGuest
             );
 
-            await this.authRepo.setReplacedByToken(refreshToken.token, refresh.token);
+            await this.authRepo.setReplacedByToken(refreshModel.token, hashRefreshToken);
+            await this.emitLoginEvent(refreshModel.userId);
 
-            const accessToken = this.generateJwtToken(
-                refreshToken.userId,
-                refreshToken.user.isGuest
-            );
-
-            return { accessToken, refresh: newRefreshToken };
+            return { accessToken: token, refresh, isGuest: refreshModel.user.isGuest };
         }
 
-        if (Date.now() - refreshToken.replacedAt.getTime() < 1000 * 10) {
-            const accessToken = this.generateJwtToken(
-                refreshToken.userId,
-                refreshToken.user.isGuest
+        const replacedAt = refreshModel.replacedAt?.getTime();
+        if (this.wasRefreshModelReplacedIn10Seconds(replacedAt)) {
+            const { token, refresh } = await this.generateTokens(
+                refreshModel.userId,
+                refreshModel.user.isGuest
             );
 
-            const newRefreshToken = this.generateToken();
-            const hashRefreshToken = crypto
-                .createHash('sha256')
-                .update(newRefreshToken)
-                .digest('hex');
-            await this.authRepo.createRefreshToken(hashRefreshToken, refreshToken.user.id);
+            await this.emitLoginEvent(refreshModel.userId);
 
-            return { accessToken, refresh: newRefreshToken };
+            return { accessToken: token, refresh, isGuest: refreshModel.user.isGuest };
         }
 
-        await this.authRepo.deleteRefreshTokensViaId(refreshToken.userId);
+        if (
+            refreshModel.user.isGuest &&
+            (!refreshModel.resynchronizedAt ||
+                Date.now() - refreshModel.resynchronizedAt.getTime() > 1000 * 20)
+        ) {
+            const update = await this.authRepo.setResynchronizedAt(refreshModel.token);
+
+            if (update.count === 0) {
+                throw new AuthError(
+                    401,
+                    'Refresh token recently resynchronized',
+                    {},
+                    'RESYNC_TOO_SOON'
+                );
+            }
+
+            const { token, refresh } = await this.generateTokens(
+                refreshModel.userId,
+                refreshModel.user.isGuest
+            );
+
+            await this.emitLoginEvent(refreshModel.userId);
+
+            logger.warn('Guest resync', { userId: refreshModel.userId });
+            return { accessToken: token, refresh, isGuest: refreshModel.user.isGuest };
+        }
+
+        if (refreshModel.user.isGuest) {
+            throw new AuthError(
+                401,
+                'Refresh token recently resynchronized',
+                {},
+                'RESYNC_TOO_SOON'
+            );
+        }
+
+        await this.authRepo.deleteRefreshTokensViaId(refreshModel.userId);
         throw new AuthError(401, 'Refresh token reuse detected');
     };
 
     deleteRefreshToken = async (token: string) => {
-        const refreshToken = await this.authRepo.findRefreshToken(token ?? '');
-        if (!refreshToken) return;
+        const refreshModel = await this.authRepo.findRefreshModel(token ?? '');
+        if (!refreshModel) return;
 
-        return await this.authRepo.deleteRefreshToken(refreshToken.token);
+        return await this.authRepo.deleteRefreshToken(refreshModel.token);
     };
 
     generateTokens = async (id: string, isGuest: boolean) => {
-        const refresh = this.generateToken();
-        const hashRefreshToken = crypto.createHash('sha256').update(refresh).digest('hex');
+        const refreshToken = this.generateToken();
+        const hashRefreshToken = crypto.createHash('sha256').update(refreshToken).digest('hex');
         const token = this.generateJwtToken(id, isGuest);
         if (isGuest) {
             await this.authRepo.createRefreshTokenForGuest(hashRefreshToken, id);
-            return { token, refresh };
+            return { token, refresh: refreshToken, hashRefreshToken };
         }
 
-        await this.authRepo.createRefreshToken(hashRefreshToken, id);
-        return { token, refresh: refresh };
+        await this.authRepo.createRefreshModel(hashRefreshToken, id);
+        return { token, refresh: refreshToken, hashRefreshToken };
     };
 
     houseKeepGuestsAndTokens = async () => {
@@ -455,7 +495,7 @@ class AuthService {
         });
     };
 
-    private generateUser = (
+    private generateUser = async (
         email: string,
         hashedPassword: string | null,
         emailVerified: boolean = false,
@@ -469,9 +509,27 @@ class AuthService {
 
         if (userId) {
             newUser.id = userId;
-        }
+            const userDailyAlbumOverallStatistics =
+                (await this.dailyAlbumRepo.getUserDailyAlbumOverallStatistics(userId)) || {
+                    userId,
+                    totalGuessed: 0,
+                    correctlyGuessed: 0,
+                    meanToGuess: 0,
+                    numberOfFirstGuesses: 0,
+                    currentStreak: 0,
+                    maxStreak: 0,
+                };
 
-        return newUser;
+            const dailyAlbumGuesses =
+                await this.dailyAlbumRepo.getAllUserDailyAlbumStatistics(userId);
+
+            return {
+                newUser,
+                userDailyAlbumOverallStatistics,
+                dailyAlbumGuesses: dailyAlbumGuesses?.dailyAlbumGuesses,
+            };
+        }
+        return { newUser };
     };
 
     private sendTokenToEmail = async (email: string) => {
@@ -496,6 +554,25 @@ class AuthService {
                 new AuthError(500, 'Failed to send email', { cause: sanitizeError(err) })
             )
         );
+    };
+
+    private updateGuestExpirationTime = async (userId: string) => {
+        if (!userId) {
+            throw new AuthError(404, 'Failed to get userId');
+        }
+
+        return await this.authRepo.updateGuestExpirationTime(userId);
+    };
+
+    private wasRefreshModelReplacedIn10Seconds = (replacedAt: number | undefined) => {
+        return Date.now() - (replacedAt || Date.now() - 15 * 1000) < 1000 * 10;
+    };
+
+    private emitLoginEvent = async (userId: string) => {
+        const lastLogin = await this.authRepo.findLastLoginEvent(userId);
+        if (!lastLogin || !isToday(lastLogin.loggedAt)) {
+            await this.authRepo.emitLoginEvent(userId);
+        }
     };
 }
 
