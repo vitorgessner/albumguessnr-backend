@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { prisma } from '../../../config/prisma';
 
 export class ProviderRepository {
@@ -41,6 +42,34 @@ export class ProviderRepository {
             },
             data: {
                 mainAccountId,
+            },
+        });
+    };
+
+    setSyncingId = async (provider: string, providerAccountId: string) => {
+        return await prisma.account.update({
+            where: {
+                provider_providerAccountId: {
+                    provider,
+                    providerAccountId,
+                },
+            },
+            data: {
+                syncingId: randomUUID(),
+            },
+        });
+    };
+
+    removeSyncingId = async (provider: string, providerAccountId: string) => {
+        return await prisma.account.update({
+            where: {
+                provider_providerAccountId: {
+                    provider,
+                    providerAccountId,
+                },
+            },
+            data: {
+                syncingId: null,
             },
         });
     };

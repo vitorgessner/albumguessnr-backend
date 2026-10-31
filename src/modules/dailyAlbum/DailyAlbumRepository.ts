@@ -7,7 +7,7 @@ import { DailyError } from './errors/DailyError';
 export class DailyAlbumRepository {
     getDailyAlbum = async () => {
         const newestDailyAlbums = await prisma.dailyAlbum.findMany({
-            take: 10,
+            take: 50,
             orderBy: {
                 date: 'desc',
             },
@@ -144,6 +144,22 @@ export class DailyAlbumRepository {
                 userTries: {
                     orderBy: {
                         nthTry: 'desc',
+                    },
+                },
+            },
+        });
+    };
+
+    getAllUserDailyAlbumStatistics = async (userId: string) => {
+        return await prisma.user.findUnique({
+            where: {
+                id: userId,
+            },
+            select: {
+                dailyAlbumGuesses: {
+                    include: {
+                        userTries: true,
+                        dailyAlbum: true,
                     },
                 },
             },

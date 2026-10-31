@@ -8,21 +8,19 @@ declare module 'axios' {
     }
 }
 
-const MAX_RETRIES = 3;
 const retryable = [429, 503];
 
 export async function createRetryInterceptor(
     error: AxiosError,
     serviceName: string,
-    fallbackWaitMs: number
+    fallbackWaitMs: number,
+    attempt: number
 ) {
     const config = error.config;
 
     if (!config) throw error;
 
     if (!retryable.includes(error.response?.status ?? 500)) throw error;
-
-    if ((config._retryCount ?? 0) >= MAX_RETRIES) throw error;
 
     if (error.status === 429) {
         logger.warn(new IntegrationError(429, `Rate limit exceeded for ${serviceName}`));
@@ -32,12 +30,11 @@ export async function createRetryInterceptor(
         logger.warn(new IntegrationError(503, `Service ${serviceName} unavailable`));
     }
 
-    config._retryCount = (config._retryCount ?? 0) + 1;
-
     const retryAfterHeader = error.response?.headers['retry-after'];
     const waitMs = retryAfterHeader
-        ? parseFloat(retryAfterHeader) * 1000
-        : fallbackWaitMs * 2 ** config._retryCount;
+        ? parseFloat(retryAfterHeader) * 1000 +
+          Math.random() * (parseFloat(retryAfterHeader) * 1000)
+        : fallbackWaitMs * 2 ** attempt + Math.random() * (fallbackWaitMs * 2 ** attempt);
 
     await new Promise((resolve) => setTimeout(resolve, waitMs));
 }

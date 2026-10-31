@@ -36,7 +36,7 @@ class ScoringService {
         const date = new Date();
 
         const previousScore = await this.scoringRepo.findBestScore(userId, albumId);
-        const oldGlobalBestScore = previousScore._max.totalScore ?? 0;
+        const oldGlobalBestScore = previousScore._max.totalScore ?? -1;
 
         const isNewBestScore = oldGlobalBestScore < totalScoreWithCategories.totalScore;
 
@@ -72,7 +72,7 @@ class ScoringService {
                 guessedCategories
             );
 
-            if (points) {
+            if (points && points.score >= 0) {
                 categories.push(points);
                 totalTime += pointsConfig[key as GameCategory].expectedTime;
             }

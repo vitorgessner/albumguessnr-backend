@@ -15,6 +15,7 @@ const globalErrorMiddleware = (err: Error, req: Request, res: Response, _: NextF
     let statusCode = 500;
     let message = 'Something went wrong';
     let name = 'Server Error';
+    let code = undefined;
 
     if (err instanceof ValidationError) {
         statusCode = err.statusCode;
@@ -24,6 +25,7 @@ const globalErrorMiddleware = (err: Error, req: Request, res: Response, _: NextF
 
     if (err instanceof AuthError) {
         statusCode = err.statusCode;
+        code = err.code;
         message = err.message;
         name = err.name;
     }
@@ -74,7 +76,7 @@ const globalErrorMiddleware = (err: Error, req: Request, res: Response, _: NextF
 
     const sanitizedError = sanitizeError(err);
 
-    logger.error(err instanceof Error ? err.message : String(err), {
+    logger.error({
         ...sanitizedError,
         requestId: req.userId,
         method: req.method,
@@ -82,7 +84,7 @@ const globalErrorMiddleware = (err: Error, req: Request, res: Response, _: NextF
         meta: err instanceof PrismaClientKnownRequestError ? err.meta : undefined,
         stack: err.stack,
     });
-    res.status(statusCode).json({ status: 'failed', name, statusCode, message });
+    res.status(statusCode).json({ status: 'failed', name, statusCode, message, code });
 };
 
 export default globalErrorMiddleware;

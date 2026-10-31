@@ -3,6 +3,7 @@ import { env } from '../../../../app';
 import { createRetryInterceptor } from '../../utils/createRetryInterceptor';
 import { SyncStatus } from '../../../../generated/prisma/enums';
 import { lastfmQueue, musicBrainzQueue, spotifyQueue } from './rateLimiters';
+import axiosInstance from '../../../../config/axios';
 
 declare module 'axios' {
     export interface InternalAxiosRequestConfig {
@@ -13,7 +14,7 @@ declare module 'axios' {
 
 export const getApiInstances = () => {
     const lastfmAxios = axios.create({
-        baseURL: 'http://ws.audioscrobbler.com/2.0/',
+        baseURL: 'https://ws.audioscrobbler.com/2.0/',
         params: {
             format: 'json',
             api_key: env.API_KEY,
@@ -23,44 +24,11 @@ export const getApiInstances = () => {
         },
     });
 
-    lastfmAxios.interceptors.request.use(async (config) => {
-        await lastfmQueue.add(() => {});
-        return config;
-    });
-
-    lastfmAxios.interceptors.response.use(
-        (response) => response,
-        async (error) => {
-            const config = error.config;
-            await createRetryInterceptor(error, 'lastfm', 2000);
-            return lastfmAxios(config);
-        }
-    );
-
-    let isRefreshing = false;
-    let failedQueue: Array<{ resolve: (token: string) => void; reject: (err: unknown) => void }> =
-        [];
-
-    const processQueue = (error: unknown, token: string | null = null) => {
-        failedQueue.forEach((promise) => {
-            if (error) {
-                return promise.reject(error);
-            }
-            return promise.resolve(token!);
-        });
-        failedQueue = [];
-    };
-
     const spotifyAxios = axios.create({
         baseURL: 'https://api.spotify.com/v1/',
         headers: {
             'User-Agent': 'AlbumGuessnr/0.0.0 ( gessnervgg@gmail.com )',
         },
-    });
-
-    spotifyAxios.interceptors.request.use(async (config) => {
-        await spotifyQueue.add(() => {});
-        return config;
     });
 
     function setupSpotifyInterceptor(
@@ -100,19 +68,7 @@ export const getApiInstances = () => {
                 const originalRequest = error.config;
 
                 if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
-                    if (isRefreshing) {
-                        return new Promise((resolve, reject) => {
-                            failedQueue.push({ resolve, reject });
-                        })
-                            .then((token) => {
-                                originalRequest.headers.Authorization = `Bearer ${token}`;
-                                return spotifyAxios(originalRequest);
-                            })
-                            .catch((err) => Promise.reject(err));
-                    }
-
                     originalRequest._retry = true;
-                    isRefreshing = true;
 
                     try {
                         const account = await getAccount();
@@ -121,8 +77,10 @@ export const getApiInstances = () => {
                             refresh_token: account.refreshToken ?? '',
                         });
 
-                        const response = await spotifyQueue.add(() =>
-                            spotifyAxios.post('https://accounts.spotify.com/api/token', params, {
+                        const response = await axiosInstance.post(
+                            'https://accounts.spotify.com/api/token',
+                            params,
+                            {
                                 headers: {
                                     'Content-Type': 'application/x-www-form-urlencoded',
                                     Authorization:
@@ -131,7 +89,7 @@ export const getApiInstances = () => {
                                             env.SPOTIFY_CLIENT_ID + ':' + env.SPOTIFY_CLIENT_SECRET
                                         ).toString('base64'),
                                 },
-                            })
+                            }
                         );
 
                         const { access_token, refresh_token, expires_in } = response.data;
@@ -150,15 +108,10 @@ export const getApiInstances = () => {
 
                         const newToken = updated.accessToken;
 
-                        processQueue(null, newToken);
-
                         originalRequest.headers.Authorization = `Bearer ${newToken}`;
                         return spotifyAxios(originalRequest);
                     } catch (refreshError) {
-                        processQueue(refreshError, null);
                         return Promise.reject(refreshError);
-                    } finally {
-                        isRefreshing = false;
                     }
                 }
 
@@ -177,19 +130,43 @@ export const getApiInstances = () => {
         },
     });
 
-    musicBrainzAxios.interceptors.request.use(async (config) => {
-        await musicBrainzQueue.add(() => {});
-        return config;
-    });
-
-    musicBrainzAxios.interceptors.response.use(
-        (response) => response,
-        async (error) => {
-            const config = error.config;
-            await createRetryInterceptor(error, 'musicbrainz', 1200);
-            return musicBrainzAxios(config);
-        }
-    );
-
     return { spotifyAxios, setupSpotifyInterceptor, lastfmAxios, musicBrainzAxios };
 };
+
+const MAX_RETRIES = 3;
+
+export const mbRequest = <T>(fn: () => Promise<T>) =>
+    musicBrainzQueue.add(async () => {
+        for (let attempt = 0; ; attempt++) {
+            try {
+                return await fn();
+            } catch (error) {
+                if (attempt >= MAX_RETRIES) throw error;
+                await createRetryInterceptor(error as AxiosError, 'musicbrainz', 2000, attempt);
+            }
+        }
+    });
+
+export const lfRequest = <T>(fn: () => Promise<T>) =>
+    lastfmQueue.add(async () => {
+        for (let attempt = 0; ; attempt++) {
+            try {
+                return await fn();
+            } catch (error) {
+                if (attempt >= MAX_RETRIES) throw error;
+                await createRetryInterceptor(error as AxiosError, 'lastfm', 2000, attempt);
+            }
+        }
+    });
+
+export const spRequest = <T>(fn: () => Promise<T>) =>
+    spotifyQueue.add(async () => {
+        for (let attempt = 0; ; attempt++) {
+            try {
+                return await fn();
+            } catch (error) {
+                if (attempt >= MAX_RETRIES) throw error;
+                await createRetryInterceptor(error as AxiosError, 'spotify', 2000, attempt);
+            }
+        }
+    });

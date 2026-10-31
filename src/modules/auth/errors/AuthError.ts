@@ -1,9 +1,11 @@
 class AuthError extends Error {
     public statusCode: number;
     public name: string = 'AuthError';
-    constructor(statusCode: number, message: string, options?: ErrorOptions) {
+    public code;
+    constructor(statusCode: number, message: string, options?: ErrorOptions, code?: string) {
         super(message, options);
         this.statusCode = statusCode;
+        this.code = code;
     }
 }
 

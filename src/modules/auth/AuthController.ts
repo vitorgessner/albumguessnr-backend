@@ -39,14 +39,22 @@ class AuthController {
     };
 
     refresh = async (req: Request, res: Response) => {
-        const { refresh } = req.cookies;
-        if (!refresh) throw new AuthError(401, 'No refresh token available');
-        const { accessToken, refresh: refreshToken } = await this.authService.refresh(refresh);
+        const { refresh: refreshToken } = req.cookies;
+        if (!refreshToken) throw new AuthError(401, 'No refresh token available');
+        const {
+            accessToken,
+            refresh: newRefreshToken,
+            isGuest,
+        } = await this.authService.refresh(refreshToken);
 
         return res
             .status(200)
             .cookie('token', accessToken, COOKIE_OPTIONS(1000 * 60 * 65))
-            .cookie('refresh', refreshToken, COOKIE_OPTIONS(1000 * 60 * 60 * 24 * 7))
+            .cookie(
+                'refresh',
+                newRefreshToken,
+                COOKIE_OPTIONS(isGuest ? 1000 * 60 * 60 * 24 * 30 : 1000 * 60 * 60 * 24 * 7)
+            )
             .json({ status: 'success', message: 'Authorization refreshed' });
     };
 
@@ -127,7 +135,6 @@ class AuthController {
     setMainProvider = async (req: Request, res: Response) => {
         const { accountId } = req.body;
         const userId = req.userId;
-        console.log(accountId);
         if (!userId) {
             throw new AuthError(401, 'User is unauthorized');
         }

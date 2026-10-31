@@ -1,4 +1,5 @@
 import { prisma } from '../../config/prisma.js';
+import { Prisma, UserDailyAlbumOverallStatistics } from '../../generated/prisma/client.js';
 import type {
     AccountCreateWithoutUserInput,
     UserCreateInput,
@@ -48,7 +49,7 @@ class AuthRepository {
         });
     };
 
-    findByToken = async (userVerificationToken: string) => {
+    findVerificationModelByToken = async (userVerificationToken: string) => {
         return await prisma.verificationToken.findUnique({
             where: {
                 token: userVerificationToken,
@@ -72,6 +73,7 @@ class AuthRepository {
                 profile: true,
                 accounts: true,
                 userStats: true,
+                mainAccount: true,
             },
             omit: {
                 email: true,
@@ -80,7 +82,13 @@ class AuthRepository {
         });
     };
 
-    create = async (user: UserCreateInput) => {
+    create = async (
+        user: UserCreateInput,
+        dailyAlbumGuesses?:
+            | Prisma.UserDailyAlbumGetPayload<{ include: { dailyAlbum: true } }>[]
+            | undefined,
+        userDailyAlbumOverallStatistics?: UserDailyAlbumOverallStatistics
+    ) => {
         if (!user.email) {
             return null;
         }
@@ -88,40 +96,78 @@ class AuthRepository {
         const id = user.id || '';
 
         const username = String(Math.round(Math.random() * 100000000));
+
+        const createData: Prisma.UserCreateInput = {
+            email: user.email,
+            password: user.password ?? null,
+            emailVerified: user.emailVerified ?? false,
+            profile: {
+                create: {
+                    username,
+                    displayUsername: username,
+                    avatar_url: this.default_avatar,
+                    bio: '',
+                },
+            },
+            userStats: {
+                create: {},
+            },
+        };
+
+        if (dailyAlbumGuesses && dailyAlbumGuesses.length > 0) {
+            const formattedGuesses: Prisma.UserDailyAlbumUncheckedCreateWithoutUserInput[] =
+                dailyAlbumGuesses.map((guess) => ({
+                    status: guess.status,
+                    nthPlayerToGuess: guess.nthPlayerToGuess,
+                    dailyAlbumId: guess.dailyAlbumId ?? guess.dailyAlbum.albumId,
+                }));
+
+            createData.dailyAlbumGuesses = {
+                create: formattedGuesses,
+            };
+        }
+
+        if (userDailyAlbumOverallStatistics) {
+            createData.userDailyAlbumOverallStatistics = {
+                create: {
+                    correctlyGuessed: userDailyAlbumOverallStatistics.correctlyGuessed,
+                    currentStreak: userDailyAlbumOverallStatistics.currentStreak,
+                    maxStreak: userDailyAlbumOverallStatistics.maxStreak,
+                    meanToGuess: userDailyAlbumOverallStatistics.meanToGuess,
+                    numberOfFirstGuesses: userDailyAlbumOverallStatistics.numberOfFirstGuesses,
+                    totalGuessed: userDailyAlbumOverallStatistics.totalGuessed,
+                },
+            };
+        }
+
         return await prisma.user.upsert({
-            where: {
-                id,
-            },
-            create: {
-                email: user.email,
-                password: user.password ?? null,
-                emailVerified: user.emailVerified ?? false,
-                profile: {
-                    create: {
-                        username,
-                        displayUsername: username,
-                        avatar_url: this.default_avatar,
-                        bio: '',
-                    },
-                },
-                userStats: {
-                    create: {},
-                },
-            },
+            where: { id },
+            create: createData,
             update: {
                 email: user.email,
                 password: user.password ?? null,
                 emailVerified: user.emailVerified ?? false,
-                profile: {
-                    create: {
-                        username,
-                        displayUsername: username,
-                        avatar_url: this.default_avatar,
-                        bio: '',
-                    },
-                },
                 userStats: {
                     create: {},
+                },
+                profile: {
+                    upsert: {
+                        where: {
+                            userId: id,
+                        },
+                        create: {
+                            username,
+                            displayUsername: username,
+                            avatar_url: this.default_avatar,
+                            bio: '',
+                        },
+                        update: {
+                            username,
+                            displayUsername: username,
+                            avatar_url: this.default_avatar,
+                            bio: '',
+                        },
+                    },
                 },
             },
             include: {
@@ -217,10 +263,9 @@ class AuthRepository {
 
             return await prisma.user.upsert({
                 where: {
-                    email: user.email,
+                    id: userId,
                 },
                 create: {
-                    id: userId,
                     email: user.email,
                     password: user.password ?? null,
                     emailVerified: user.emailVerified ?? false,
@@ -280,8 +325,6 @@ class AuthRepository {
                 },
             });
         }
-
-        console.log('here?');
 
         return prisma.user.upsert({
             where: {
@@ -358,7 +401,7 @@ class AuthRepository {
         });
     };
 
-    findRefreshToken = async (token: string) => {
+    findRefreshModel = async (token: string) => {
         return await prisma.refreshToken.findUnique({
             where: {
                 token,
@@ -381,7 +424,7 @@ class AuthRepository {
         });
     };
 
-    createRefreshToken = async (token: string, id: string) => {
+    createRefreshModel = async (token: string, id: string) => {
         return await prisma.refreshToken.create({
             data: {
                 token,
@@ -446,13 +489,29 @@ class AuthRepository {
     };
 
     setReplacedByToken = async (token: string, tokenToSet: string) => {
-        return await prisma.refreshToken.update({
+        return await prisma.refreshToken.updateMany({
+            where: { token, replacedByToken: null },
+            data: { replacedByToken: tokenToSet, replacedAt: new Date() },
+        });
+    };
+
+    setResynchronizedAt = async (token: string) => {
+        return await prisma.refreshToken.updateMany({
             where: {
                 token,
+                OR: [
+                    {
+                        resynchronizedAt: null,
+                    },
+                    {
+                        resynchronizedAt: {
+                            lt: new Date(new Date().getTime() - 20000),
+                        },
+                    },
+                ],
             },
             data: {
-                replacedByToken: tokenToSet,
-                replacedAt: new Date(),
+                resynchronizedAt: new Date(),
             },
         });
     };
@@ -494,7 +553,7 @@ class AuthRepository {
                     },
                     {
                         expirationTime: {
-                            gte: new Date(),
+                            lte: new Date(),
                         },
                     },
                 ],
@@ -522,6 +581,49 @@ class AuthRepository {
                 id: {
                     in: guestsToDelete.map((user) => user.id),
                 },
+            },
+        });
+    };
+
+    updateGuestExpirationTime = async (userId: string) => {
+        return await prisma.user.update({
+            where: {
+                id: userId,
+            },
+            data: {
+                refreshToken: {
+                    updateMany: {
+                        where: {
+                            userId,
+                        },
+                        data: {
+                            expirationTime: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30),
+                        },
+                    },
+                },
+            },
+        });
+    };
+
+    findLastLoginEvent = async (userId: string) => {
+        const lastLoginEvent = await prisma.loginEvents.findMany({
+            where: {
+                userId,
+            },
+            orderBy: {
+                loggedAt: 'desc',
+            },
+            take: 1,
+        });
+
+        return lastLoginEvent[0];
+    };
+
+    emitLoginEvent = async (userId: string) => {
+        return await prisma.loginEvents.create({
+            data: {
+                userId,
+                loggedAt: new Date(),
             },
         });
     };

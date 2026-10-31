@@ -125,12 +125,10 @@ export const oAuthRoutes = (authService: AuthService) => {
             },
             async (err: unknown, rawUser: Express.User, info?: { message?: string }) => {
                 if (err || !rawUser) {
-                    console.log(rawUser);
                     return res.redirect(env.FRONTEND_URL + '/auth/login?message=Auth failed');
                 }
 
                 if (info && info.message) {
-                    console.log(info);
                     const errorMessage = info.message ? info.message : 'Auth failed';
                     return res.redirect(
                         `${env.FRONTEND_URL}/auth/login?message=${encodeURIComponent(errorMessage)}`
