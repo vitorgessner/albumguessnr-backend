@@ -38,4 +38,12 @@ export class ProviderService {
 
         await this.providerRepo.deleteAccount(provider, providerAccountId);
     };
+
+    setSyncingId = async (provider: string, providerAccountId: string) => {
+        return await this.providerRepo.setSyncingId(provider, providerAccountId);
+    };
+
+    removeSyncingId = async (provider: string, providerAccountId: string) => {
+        return await this.providerRepo.removeSyncingId(provider, providerAccountId);
+    };
 }

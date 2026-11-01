@@ -103,6 +103,19 @@ class AlbumRepository {
         });
     };
 
+    getDailyAlbumTries = async (albumId: string, dailyAlbumId: string) => {
+        return await prisma.userDailyAlbum.count({
+            where: {
+                dailyAlbumId,
+                userTries: {
+                    some: {
+                        albumGuessId: albumId,
+                    },
+                },
+            },
+        });
+    };
+
     create = async (
         data: AlbumCreateInputWithoutMbid,
         genres: Array<GenreCreateInput>,

@@ -4,6 +4,17 @@ import { IUpdateSync } from './types/IUpdateSync.js';
 import { IUserAlbumFamiliarity } from './types/IUserAlbumFamiliarity.js';
 
 class IntegrationRepository {
+    findProviders = async (userId: string) => {
+        return await prisma.user.findUnique({
+            where: {
+                id: userId,
+            },
+            select: {
+                accounts: true,
+            },
+        });
+    };
+
     findMainProvider = async (userId: string) => {
         return await prisma.user.findUnique({
             where: {
@@ -35,35 +46,25 @@ class IntegrationRepository {
         });
     };
 
-    findAlbums = async (id: string, rand: number) => {
-        return await prisma.userAlbumFamiliarity.findMany({
-            where: {
-                userId: id,
-            },
+    findScores = (userId: string) =>
+        prisma.userAlbumFamiliarity.findMany({
+            where: { userId },
+            select: { albumId: true, familiarityScore: true },
+        });
+
+    findAlbumsByIds = (userId: string, albumIds: string[]) =>
+        prisma.userAlbumFamiliarity.findMany({
+            where: { userId, albumId: { in: albumIds } },
             include: {
                 album: {
                     include: {
                         tracks: true,
-                        genres: {
-                            select: {
-                                genre: true,
-                            },
-                        },
-                        artists: {
-                            include: {
-                                artist: true,
-                            },
-                        },
+                        genres: { include: { genre: true } },
+                        artists: { include: { artist: true } },
                     },
                 },
             },
-            orderBy: {
-                timesListened: 'desc',
-            },
-            take: 50,
-            skip: rand,
         });
-    };
 
     countUserAlbums = async (id: string) => {
         return await prisma.userAlbumFamiliarity.count({

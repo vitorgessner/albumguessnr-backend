@@ -19,6 +19,7 @@ model User {
   password                        String?
   createdAt                       DateTime                         @default(now())
   isGuest                         Boolean                          @default(false)
+  topPlayCount                    Int                              @default(0)
   userStats                       UserStats?
   profile                         Profile?
   accounts                        Account[]
@@ -36,6 +37,7 @@ model User {
   albumDataErrorLog               UserAlbumDataErrorsLogs[]
   dailyAlbumGuesses               UserDailyAlbum[]
   userDailyAlbumOverallStatistics UserDailyAlbumOverallStatistics?
+  userLoginEvents                 LoginEvents[]
 }
 
 model UserStats {
@@ -107,8 +109,9 @@ model VerificationToken {
 model RefreshToken {
   token           String   @id
   expirationTime  DateTime
-  replacedAt      DateTime @default(now())
+  replacedAt      DateTime? 
   replacedByToken String?
+  resynchronizedAt DateTime?
   userId          String
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
@@ -118,7 +121,7 @@ model GuessAttempt {
   userId        String
   user          User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   albumId       String
-  album         Album                  @relation(fields: [albumId], references: [id])
+  album         Album                  @relation(fields: [albumId], references: [id], onDelete: Cascade)
   date          DateTime               @default(now())
   totalScore    Int                    @default(0)
   tracksHit     Int                    @default(0)
@@ -152,7 +155,7 @@ model UserAlbumScores {
   userId    String
   user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   albumId   String
-  album     Album        @relation(fields: [albumId], references: [id])
+  album     Album        @relation(fields: [albumId], references: [id], onDelete: Cascade)
   gameMode  GameCategory
   date      DateTime     @db.Date
   bestScore Int          @default(0)
@@ -172,7 +175,7 @@ model UserAlbumStats {
   userId          String
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   albumId         String
-  album           Album    @relation(fields: [albumId], references: [id])
+  album           Album    @relation(fields: [albumId], references: [id], onDelete: Cascade)
   lastTimeGuessed DateTime
   timesGuessed    Int
 
@@ -185,7 +188,7 @@ model UserAlbumFamiliarity {
   familiarityScore Float
   lastTimeListened DateTime
   albumId          String
-  album            Album    @relation(fields: [albumId], references: [id])
+  album            Album    @relation(fields: [albumId], references: [id], onDelete: Cascade)
   userId           String
   user             User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -240,7 +243,7 @@ model Album {
 
 model DailyAlbum {
   albumId         String           @id @unique
-  album           Album            @relation(fields: [albumId], references: [id])
+  album           Album            @relation(fields: [albumId], references: [id], onDelete: Cascade)
   lastfmListeners String?
   lastfmPlaycount String?
   date            DateTime         @unique
@@ -249,7 +252,7 @@ model DailyAlbum {
 
 model AlbumPools {
   albumId        String    @id @unique
-  album          Album     @relation(fields: [albumId], references: [id])
+  album          Album     @relation(fields: [albumId], references: [id], onDelete: Cascade)
   electable      Boolean   @default(true)
 }
 
@@ -258,7 +261,7 @@ model UserDailyAlbum {
   userId           String?
   user             User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
   dailyAlbumId     String
-  dailyAlbum       DailyAlbum           @relation(fields: [dailyAlbumId], references: [albumId])
+  dailyAlbum       DailyAlbum           @relation(fields: [dailyAlbumId], references: [albumId], onDelete: Cascade)
   nthPlayerToGuess Int?
   status           UserDailyAlbumStatus
   userTries        DailyAlbumTry[]
@@ -303,8 +306,8 @@ model Genre {
 model AlbumsGenre {
   albumId String
   genreId String
-  album   Album  @relation(fields: [albumId], references: [id])
-  genre   Genre  @relation(fields: [genreId], references: [id])
+  album   Album  @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  genre   Genre  @relation(fields: [genreId], references: [id], onDelete: Cascade)
 
   @@id([albumId, genreId])
 }
@@ -320,8 +323,8 @@ model Artist {
 model AlbumsArtist {
   albumId  String
   artistId String
-  album    Album  @relation(fields: [albumId], references: [id])
-  artist   Artist @relation(fields: [artistId], references: [id])
+  album    Album  @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  artist   Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
 
   @@id([albumId, artistId])
 }
@@ -331,7 +334,7 @@ model Track {
   name           String
   normalizedName String
   albumId        String
-  album          Album          @relation(fields: [albumId], references: [id])
+  album          Album          @relation(fields: [albumId], references: [id], onDelete: Cascade)
   guessedTracks  GuessedTrack[]
 
   @@unique([normalizedName, albumId])
@@ -369,6 +372,20 @@ model UserAlbumDataErrorsLogs {
   status           ErrorStatus @default(PENDING)
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
+}
+
+model LoginEvents {
+  userId String
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+  loggedAt DateTime 
+
+  @@unique([userId, loggedAt])
+}
+
+model AdblockStat {
+  date DateTime @id @db.Date
+  checked Int @default(0)
+  blocked Int @default(0)
 }
 
 enum ErrorStatus {

@@ -14,7 +14,7 @@ class GuessController {
         private guessOrchestratorService: GuessOrchestratorService
     ) {}
 
-    getTimesGuessed = async (req: Request, res: Response) => {
+    getUserGuessStats = async (req: Request, res: Response) => {
         const userId = req.userId;
         if (!userId) throw new AuthError(401, 'Unauthorized');
 
@@ -24,9 +24,13 @@ class GuessController {
         if (!(await this.guessService.doesAlbumExists(albumId)))
             throw new ValidationError(404, 'Album not found');
 
-        const response = await this.guessService.getTimesGuessed(userId, albumId as string);
+        const response = await this.guessService.getUserGuessStats(userId, albumId as string);
 
-        res.status(200).json({ timesGuessed: response?.timesGuessed });
+        res.status(200).json({
+            timesGuessed: response?.timesGuessed,
+            lastTimeGuessed: response?.lastTimeGuessed,
+            timesListened: response?.album.userAlbumFamiliarities[0]?.timesListened,
+        });
     };
 
     getLastTenPlayers = async (req: Request, res: Response) => {
@@ -68,7 +72,7 @@ class GuessController {
         ]);
         return res.status(200).json({
             status: 'success',
-            message: 'Guess attempt successfull',
+            message: 'Guess attempt successful',
             totalScore: finalScore.score,
             isNewBestScore: finalScore.isNewBestScore,
         });

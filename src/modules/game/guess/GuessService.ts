@@ -11,8 +11,8 @@ class GuessService {
         private albumRepo: AlbumRepository
     ) {}
 
-    getTimesGuessed = async (userId: string, albumId: string) => {
-        return await this.guessRepo.getTimesGuessed(userId, albumId);
+    getUserGuessStats = async (userId: string, albumId: string) => {
+        return await this.guessRepo.getUserGuessStats(userId, albumId);
     };
 
     getLastTenPlayers = async () => {

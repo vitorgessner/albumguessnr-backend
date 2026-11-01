@@ -1,4 +1,4 @@
-import { getApiInstances } from '../providers/config/axiosInstances';
+import { getApiInstances, mbRequest } from '../providers/config/axiosInstances';
 import { IMBAlbum, IMBAlbumResponse } from '../providers/interfaces/musicBrainzInterfaces';
 import { normalizeAlbumName, normalizeArtistName } from './normalize';
 
@@ -10,14 +10,17 @@ export class MusicBrainzWrapper {
 
     fetchAlbum = async (name: string, artist?: string): Promise<IMBAlbum | undefined> => {
         const formattedArtist = normalizeArtistName(artist ?? '');
+        const normalizedTitle = normalizeAlbumName(name);
 
-        const response = await this.musicBrainzAxios.get<IMBAlbumResponse>('', {
-            params: {
-                query: `album:${normalizeAlbumName(name)} AND 
+        const response = await mbRequest(() =>
+            this.musicBrainzAxios.get<IMBAlbumResponse>('', {
+                params: {
+                    query: `album:${normalizedTitle} AND 
                             artist:${formattedArtist} AND 
                             (primarytype:album OR primarytype:ep)`,
-            },
-        });
+                },
+            })
+        );
 
         return response.data['release-groups'][0];
     };

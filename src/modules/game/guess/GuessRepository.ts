@@ -4,7 +4,7 @@ import { CategoriesWithScore } from './types/CategoriesWithScore.js';
 import { GuessedTrack } from './types/GuessedTrack.js';
 
 class GuessRepository {
-    getTimesGuessed = async (userId: string, albumId: string) => {
+    getUserGuessStats = async (userId: string, albumId: string) => {
         return await prisma.userAlbumStats.findUnique({
             where: {
                 userId_albumId: {
@@ -14,6 +14,16 @@ class GuessRepository {
             },
             select: {
                 timesGuessed: true,
+                lastTimeGuessed: true,
+                album: {
+                    select: {
+                        userAlbumFamiliarities: {
+                            select: {
+                                timesListened: true,
+                            },
+                        },
+                    },
+                },
             },
         });
     };

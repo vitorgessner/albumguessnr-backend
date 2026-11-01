@@ -127,17 +127,27 @@ export class DailyAlbumService {
             (album) => !!album.rymRanking && !!album.rymRating && !!album.descriptors
         );
 
-        const albumsIds = await Promise.all(
+        const albumsInPool = await Promise.all(
             albums.map((album) => this.dailyAlbumRepo.findAlbumInPool(album.id))
         );
 
-        const formattedAlbumsIds = albumsIds
-            .filter((album) => !!album)
-            .map((album) => album.albumId);
+        const albumsIds = albumsInPool.filter((album) => !!album).map((album) => album.albumId);
 
-        const possibleAlbums = albums.filter((album) => formattedAlbumsIds.includes(album.id));
+        const possibleAlbums = albums.filter((album) => albumsIds.includes(album.id));
+        const dailyAlbum = await this.dailyAlbumRepo.getDailyAlbum();
+        if (!dailyAlbum) {
+            throw new DailyError(404, 'Daily album not set');
+        }
+        const possibleAlbumsWithTries = await Promise.all(
+            possibleAlbums.map(async (album) => {
+                return {
+                    ...album,
+                    count: await this.albumRepo.getDailyAlbumTries(album.id, dailyAlbum?.albumId),
+                };
+            })
+        );
 
-        return possibleAlbums;
+        return possibleAlbumsWithTries;
     };
 
     findPossibleAlbumsByArtist = async (artist: string) => {
@@ -154,8 +164,20 @@ export class DailyAlbumService {
             .map((album) => album.albumId);
 
         const possibleAlbums = albums.filter((album) => formattedAlbumsIds.includes(album.id));
+        const dailyAlbum = await this.dailyAlbumRepo.getDailyAlbum();
+        if (!dailyAlbum) {
+            throw new DailyError(404, 'Daily album not set');
+        }
+        const possibleAlbumsWithTries = await Promise.all(
+            possibleAlbums.map(async (album) => {
+                return {
+                    ...album,
+                    count: await this.albumRepo.getDailyAlbumTries(album.id, dailyAlbum?.albumId),
+                };
+            })
+        );
 
-        return possibleAlbums;
+        return possibleAlbumsWithTries;
     };
 
     setDailyAlbum = async (albumId: string) => {
@@ -176,9 +198,11 @@ export class DailyAlbumService {
         const lastDailyAlbum = await this.dailyAlbumRepo.getLastTenDailyAlbums();
         const lastDate =
             lastDailyAlbum[0]?.date || new Date(new Date().setDate(new Date().getDate() - 1));
-        const year = lastDate.getUTCFullYear();
-        const month = String(lastDate.getUTCMonth() + 1).padStart(2, '0');
-        const date = String(lastDate.getUTCDate() + 1).padStart(2, '0');
+
+        const tomorrowDate = new Date(lastDate.setDate(lastDate.getDate() + 1));
+        const year = tomorrowDate.getUTCFullYear();
+        const month = String(tomorrowDate.getUTCMonth() + 1).padStart(2, '0');
+        const date = String(tomorrowDate.getUTCDate()).padStart(2, '0');
 
         const tomorrow = `${year}-${month}-${date}T00:00:00.000Z`;
 
@@ -269,7 +293,7 @@ export class DailyAlbumService {
             yesterdaysAlbum.albumId
         );
 
-        if (!userStatistics || userStatistics.status === 'UNFINISHED') {
+        if (userStatistics?.status === 'UNFINISHED') {
             return false;
         }
 
@@ -353,7 +377,7 @@ export class DailyAlbumService {
             throw new ValidationError(404, `${album.name} has no artists`);
         }
 
-        const lastfmAxiosInstance = await this.getLastfmAxiosInstace();
+        const lastfmAxiosInstance = await this.getLastfmAxiosInstance();
 
         const lastfmInfo = await this.integrationService.fetchInfoWithAlbumData(
             album.normalizedName,
@@ -461,18 +485,18 @@ export class DailyAlbumService {
         return normalizedAlbums;
     };
 
-    private getLastfmAxiosInstace = async () => {
+    private getLastfmAxiosInstance = async () => {
         const axiosInstances = await getApiInstances();
         return axiosInstances.lastfmAxios;
     };
 
     private getLastfmInfo = async (title: string, artist: string) => {
-        const lastfmAxiosInstace = await this.getLastfmAxiosInstace();
+        const lastfmAxiosInstance = await this.getLastfmAxiosInstance();
 
         const lastfmInfo = await this.integrationService.fetchInfoWithAlbumData(
             title,
             artist,
-            lastfmAxiosInstace
+            lastfmAxiosInstance
         );
         if (!lastfmInfo) {
             await this.integrationService.saveFailedAlbumSync(

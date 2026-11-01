@@ -38,6 +38,13 @@ class ProfileService {
             'https://hdidgrauakxbjamfaiah.supabase.co/storage/v1/object/public/profilePictures/uploads/default.svg';
 
         const trimmedUsername = username.trim();
+        const nameExists = await this.profileRepo.findByUserUsername(
+            trimmedUsername.toLocaleLowerCase()
+        );
+
+        if (nameExists) {
+            throw new AuthError(400, 'Username already taken');
+        }
 
         if (!file) {
             await this.profileRepo.edit(
