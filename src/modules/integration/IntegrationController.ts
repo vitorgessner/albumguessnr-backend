@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import type IntegrationService from './IntegrationService.js';
 import AuthError from '../auth/errors/AuthError.js';
+import { includesSomeValue } from '../../shared/utils/includesSomeValue.js';
 
 class IntegrationController {
     private integrationService: IntegrationService;
@@ -19,10 +20,14 @@ class IntegrationController {
         const excludeIds = response.map((album) => album.albumId);
         this.excludeCache.set(userId, [...oldExcludeIds, ...excludeIds]);
 
+        if (includesSomeValue(oldExcludeIds, excludeIds)) {
+            this.excludeCache.set(userId, excludeIds);
+        }
+
         res.status(200).json({
             status: 'success',
             albums: response,
-            excludeIds,
+            excludeIds: [...oldExcludeIds, ...excludeIds],
         });
     };
 }
