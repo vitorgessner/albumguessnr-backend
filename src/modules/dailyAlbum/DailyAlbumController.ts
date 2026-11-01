@@ -6,7 +6,8 @@ import AuthService from '../auth/AuthService';
 import AuthError from '../auth/errors/AuthError';
 import COOKIE_OPTIONS from '../auth/utils/COOKIE_OPTIONS';
 import { DailyAlbumService } from './DailyAlbumService';
-import type { Request, Response } from 'express';
+import type { NextFunction, Request, Response } from 'express';
+import setLimiter from '../auth/middlewares/limiter';
 
 export class DailyAlbumController {
     constructor(
@@ -15,7 +16,7 @@ export class DailyAlbumController {
         private logger: winston.Logger
     ) {}
 
-    getDailyAlbum = async (req: Request, res: Response) => {
+    getDailyAlbum = async (req: Request, res: Response, next: NextFunction) => {
         const userId = req.userId;
 
         const { dailyAlbum, dailyAlbumTotalGuessesCount, dailyAlbumNumber, url } =
@@ -31,13 +32,17 @@ export class DailyAlbumController {
         };
 
         if (!userId) {
-            const guest = await this.authService.createGuest();
+            return setLimiter(60, 10)(req, res, async (err) => {
+                if (err) return next(err);
 
-            return res
-                .status(200)
-                .cookie('token', guest.token, COOKIE_OPTIONS(1000 * 60 * 65))
-                .cookie('refresh', guest.refresh, COOKIE_OPTIONS(1000 * 60 * 60 * 24 * 30))
-                .json(json);
+                const guest = await this.authService.createGuest();
+
+                return res
+                    .status(200)
+                    .cookie('token', guest.token, COOKIE_OPTIONS(1000 * 60 * 65))
+                    .cookie('refresh', guest.refresh, COOKIE_OPTIONS(1000 * 60 * 60 * 24 * 30))
+                    .json(json);
+            });
         }
 
         return res.status(200).json(json);

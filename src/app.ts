@@ -238,17 +238,6 @@ export const getApp = (): { app: Application; startConsumers: () => Promise<void
 
     app.use('/metrics', analyticsRoutes(analyticsController));
 
-    app.get('/debug-ip', (req, res) => {
-        res.json({
-            reqIp: req.ip,
-            socket: req.socket.remoteAddress,
-            xForwardedFor: req.headers['x-forwarded-for'],
-            cfConnectingIp: req.headers['cf-connecting-ip'],
-            trueClientIp: req.headers['true-client-ip'],
-            cfRay: req.headers['cf-ray'],
-        });
-    });
-
     cron.schedule('0 7 * * *', () => runDailyAlbumCron(), {
         timezone: 'America/Sao_Paulo',
     });

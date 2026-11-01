@@ -10,7 +10,7 @@ export const dailyAlbumRoutes = (controller: DailyAlbumController) => {
         controller.saveAlbumsAndAddToPool(req, res)
     );
 
-    router.get('/album', adminAuthMiddleware, (req, res) => controller.getDailyAlbum(req, res));
+    router.get('/album', (req, res, next) => controller.getDailyAlbum(req, res, next));
 
     router.post('/album', setLimiter(15, 5), adminAuthMiddleware, (req, res) =>
         controller.defineDailyAlbumForDayAfterTomorrow(req, res)
