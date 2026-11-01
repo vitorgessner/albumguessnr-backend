@@ -79,7 +79,7 @@ import { AnalyticsController } from './modules/analytics/AnalyticsController.js'
 
 export const getApp = (): { app: Application; startConsumers: () => Promise<void> } => {
     const app = express();
-    app.set('trust-proxy', 3);
+    app.set('trust proxy', 3);
     app.use(
         helmet({
             crossOriginResourcePolicy: false,
