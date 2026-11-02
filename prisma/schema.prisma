@@ -20,6 +20,7 @@ model User {
   createdAt                       DateTime                         @default(now())
   isGuest                         Boolean                          @default(false)
   topPlayCount                    Int                              @default(0)
+  lastAlbumsSync                  DateTime?
   userStats                       UserStats?
   profile                         Profile?
   accounts                        Account[]

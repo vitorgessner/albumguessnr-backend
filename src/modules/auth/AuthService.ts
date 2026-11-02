@@ -187,11 +187,19 @@ class AuthService {
         return { user, token, refresh };
     };
 
-    createAccount = async (account: AccountCreateInputWithUser) => {
+    createAccount = async (userId: string, account: AccountCreateInputWithUser) => {
         const accountData = await this.authRepo.getAccount(
             account.provider,
             account.providerAccountId
         );
+
+        if (accountData && accountData.userId !== userId) {
+            return {
+                status: 'error',
+                message: 'Provider already in use on another account',
+                account: accountData,
+            };
+        }
 
         if (accountData) {
             return { status: 'success', message: 'Logging in', account: accountData };

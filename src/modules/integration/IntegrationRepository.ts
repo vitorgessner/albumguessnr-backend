@@ -1,9 +1,21 @@
+import { randomUUID } from 'node:crypto';
 import { prisma } from '../../config/prisma.js';
 import { FailedAlbumsSyncCreateInput } from '../../generated/prisma/models.js';
 import { IUpdateSync } from './types/IUpdateSync.js';
 import { IUserAlbumFamiliarity } from './types/IUserAlbumFamiliarity.js';
 
 class IntegrationRepository {
+    findLastSyncedAt = async (userId: string) => {
+        return await prisma.user.findUnique({
+            where: {
+                id: userId,
+            },
+            select: {
+                lastAlbumsSync: true,
+            },
+        });
+    };
+
     findProviders = async (userId: string) => {
         return await prisma.user.findUnique({
             where: {
@@ -84,6 +96,22 @@ class IntegrationRepository {
             },
             data: {
                 ...data,
+                user: {
+                    update: {
+                        lastAlbumsSync: new Date(),
+                    },
+                },
+            },
+        });
+    };
+
+    updateSyncingId = async (oldSyncingId: string | null | undefined) => {
+        return await prisma.account.updateMany({
+            where: {
+                syncingId: oldSyncingId || null,
+            },
+            data: {
+                syncingId: randomUUID(),
             },
         });
     };

@@ -16,7 +16,8 @@ const syncMiddleware = (
 
             const mainProvider = await integrationService.findMainProvider(userId);
             const lastSyncedAt = await integrationService.findLastSyncedAt(userId);
-            if (getDaysUntilNextSync(lastSyncedAt) > 0) {
+            const albumsQuantity = await integrationService.getAlbumsQuantity(userId);
+            if (getDaysUntilNextSync(lastSyncedAt) > 0 && albumsQuantity >= 100) {
                 logger.warn({
                     userId: req.userId,
                     nextSyncIn: getDaysUntilNextSync(lastSyncedAt) + ' days',
@@ -53,14 +54,21 @@ const syncMiddleware = (
 
             await channel.then((res) => res.assertExchange(exchange, 'direct', { durable: true }));
 
-            const published = await channel.then((res) =>
-                res.publish(exchange, `sync.${mainProvider.provider}.initial`, message)
-            );
+            const published = await channel.then((res) => {
+                return res.publish(exchange, `sync.${mainProvider.provider}.initial`, message);
+            });
 
             if (!published) {
                 logger.warn('channel buffer is full, message queued locally');
             } else {
                 logger.info(` [x] Sent sync.${mainProvider.provider}.initial`);
+                await integrationService.updateLastSynced(
+                    mainProvider.provider,
+                    mainProvider.providerAccountId,
+                    {
+                        syncingTimestamp: new Date(),
+                    }
+                );
             }
 
             return next();

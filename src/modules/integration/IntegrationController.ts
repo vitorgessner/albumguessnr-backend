@@ -30,6 +30,18 @@ class IntegrationController {
             excludeIds: [...oldExcludeIds, ...excludeIds],
         });
     };
+
+    getAlbumsQuantity = async (req: Request, res: Response) => {
+        const userId = req.userId;
+        if (!userId) throw new AuthError(401, 'Unauthorized');
+
+        const quantity = await this.integrationService.getAlbumsQuantity(userId);
+
+        return res.status(200).json({
+            status: 'success',
+            quantity,
+        });
+    };
 }
 
 export default IntegrationController;
