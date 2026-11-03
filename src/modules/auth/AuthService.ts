@@ -553,7 +553,7 @@ class AuthService {
             buildEmailTemplate(
                 'Verify your account',
                 // eslint-disable-next-line max-len
-                'Welcome to the most fun community for album guessing. Prepare to compete with your friends and see who does better.',
+                'Welcome to the brand new community for album guessing. Prepare to compete with your friends and have fun.',
                 'Please click on the button below to verify your account and start guessing!',
                 `/verify/${verificationToken}`
             )
