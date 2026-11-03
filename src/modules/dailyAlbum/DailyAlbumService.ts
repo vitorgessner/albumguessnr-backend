@@ -118,8 +118,9 @@ export class DailyAlbumService {
     findPossibleAlbums = async (attempt: string) => {
         const possibleAlbums = await this.findPossibleAlbumsByTitle(attempt);
         const possibleArtists = await this.findPossibleAlbumsByArtist(attempt);
+        const possibleYears = await this.findPossibleAlbumsByYear(attempt);
 
-        return [...possibleAlbums, ...possibleArtists];
+        return [...possibleAlbums, ...possibleArtists, ...possibleYears];
     };
 
     findPossibleAlbumsByTitle = async (title: string) => {
@@ -152,6 +153,36 @@ export class DailyAlbumService {
 
     findPossibleAlbumsByArtist = async (artist: string) => {
         const albums = (await this.albumRepo.getByArtist(artist)).filter(
+            (album) => !!album.rymRanking && !!album.rymRating && !!album.descriptors
+        );
+
+        const albumsIds = await Promise.all(
+            albums.map((album) => this.dailyAlbumRepo.findAlbumInPool(album.id))
+        );
+
+        const formattedAlbumsIds = albumsIds
+            .filter((album) => !!album)
+            .map((album) => album.albumId);
+
+        const possibleAlbums = albums.filter((album) => formattedAlbumsIds.includes(album.id));
+        const dailyAlbum = await this.dailyAlbumRepo.getDailyAlbum();
+        if (!dailyAlbum) {
+            throw new DailyError(404, 'Daily album not set');
+        }
+        const possibleAlbumsWithTries = await Promise.all(
+            possibleAlbums.map(async (album) => {
+                return {
+                    ...album,
+                    count: await this.albumRepo.getDailyAlbumTries(album.id, dailyAlbum?.albumId),
+                };
+            })
+        );
+
+        return possibleAlbumsWithTries;
+    };
+
+    findPossibleAlbumsByYear = async (year: string) => {
+        const albums = (await this.albumRepo.getByYear(year)).filter(
             (album) => !!album.rymRanking && !!album.rymRating && !!album.descriptors
         );
 
