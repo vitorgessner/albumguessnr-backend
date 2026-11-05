@@ -42,7 +42,7 @@ class ProfileService {
             trimmedUsername.toLocaleLowerCase()
         );
 
-        if (nameExists) {
+        if (nameExists && nameExists.user.id !== id) {
             throw new AuthError(400, 'Username already taken');
         }
 

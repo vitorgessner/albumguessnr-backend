@@ -10,7 +10,7 @@ export const dailyAlbumRoutes = (controller: DailyAlbumController) => {
         controller.saveAlbumsAndAddToPool(req, res)
     );
 
-    router.get('/stats', (req, res) => controller.getDailyStats(req, res));
+    router.get('/stats', (req, res, next) => controller.getDailyStats(req, res, next));
 
     router.get('/row/:albumId', (req, res) => controller.buildGuessRow(req, res));
 

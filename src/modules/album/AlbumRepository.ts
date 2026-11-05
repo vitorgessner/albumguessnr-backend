@@ -81,6 +81,32 @@ class AlbumRepository {
         });
     };
 
+    getByYear = async (year: string) => {
+        return await prisma.album.findMany({
+            where: {
+                year: {
+                    contains: year,
+                    mode: 'insensitive',
+                },
+                NOT: {
+                    rymRanking: null,
+                },
+            },
+            include: {
+                artists: {
+                    include: {
+                        artist: true,
+                    },
+                },
+                genres: {
+                    include: {
+                        genre: true,
+                    },
+                },
+            },
+        });
+    };
+
     getByTitleAndArtist = async (title: string, artist: string) => {
         return await prisma.album.findUnique({
             where: {

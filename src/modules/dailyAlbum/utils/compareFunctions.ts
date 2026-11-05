@@ -1,5 +1,5 @@
 import { Decimal } from '@prisma/client/runtime/client';
-import { CellStatus, Direction } from './buildGuessRow';
+import { CellStatus, Direction } from '../types/guessRow';
 
 export function compareYear(
     guessed: string | null,
