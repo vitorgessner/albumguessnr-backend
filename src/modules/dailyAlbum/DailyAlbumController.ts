@@ -16,7 +16,7 @@ export class DailyAlbumController {
         private logger: winston.Logger
     ) {}
 
-    getDailyStats = async (req: Request, res: Response) => {
+    getDailyStats = async (req: Request, res: Response, next: NextFunction) => {
         const userId = req.userId;
 
         const { dailyAlbumTotalGuessesCount, dailyAlbumNumber } =

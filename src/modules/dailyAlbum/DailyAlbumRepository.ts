@@ -176,22 +176,6 @@ export class DailyAlbumRepository {
         });
     };
 
-    getAllUserDailyAlbumStatistics = async (userId: string) => {
-        return await prisma.user.findUnique({
-            where: {
-                id: userId,
-            },
-            select: {
-                dailyAlbumGuesses: {
-                    include: {
-                        userTries: true,
-                        dailyAlbum: true,
-                    },
-                },
-            },
-        });
-    };
-
     getLastPlayerToGuessPosition = async (dailyAlbumId: string) => {
         const order = await prisma.userDailyAlbum.findMany({
             where: {
