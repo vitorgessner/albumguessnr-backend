@@ -16,6 +16,7 @@ import { getApiInstances } from '../integration/providers/config/axiosInstances'
 import winston from 'winston';
 import { DailyError } from './errors/DailyError';
 import DatabaseError from '../../shared/errors/DatabaseError';
+import { compareArray, compareRanking, compareRating, compareYear } from './utils/compareFunctions';
 
 const Album = z.object({
     position: z.string().transform((val) => Number(val)),
@@ -88,10 +89,15 @@ export class DailyAlbumService {
         return album;
     };
 
-    getUserDailyAlbumStatistics = async (userId: string, dailyAlbumId: string) => {
+    getUserDailyAlbumStatistics = async (userId: string, date?: string) => {
+        const dailyAlbum = await this.dailyAlbumRepo.getDailyAlbum(date);
+        if (!dailyAlbum) {
+            throw new DailyError(404, 'Daily album not found for specified date');
+        }
+
         const userDailyAlbumStatistics = await this.dailyAlbumRepo.getUserDailyAlbumStatistics(
             userId,
-            dailyAlbumId
+            dailyAlbum.albumId
         );
 
         const totalGuesses = userDailyAlbumStatistics?.userTries.length;
@@ -302,6 +308,39 @@ export class DailyAlbumService {
 
     resetUserStreak = async (userId: string) => {
         return await this.dailyAlbumRepo.resetStreak(userId);
+    };
+
+    buildGuessRow = async (guessedId: string) => {
+        const dailyAlbumModel = await this.getDailyAlbum();
+        const guessed = await this.albumRepo.get(guessedId);
+        const daily = dailyAlbumModel.dailyAlbum;
+
+        if (!daily || !guessed) {
+            throw new DailyError(404, 'Daily album or guessed album not found');
+        }
+
+        const targetArtistIds = daily.album.artists.map((a) => a.artist.id).filter((_, i) => i < 3);
+        const targetGenreIds = daily.album.genres.map((g) => g.genre.id).filter((_, i) => i < 3);
+        const guessedArtistIds = guessed.artists.map((a) => a.artist.id).filter((_, i) => i < 3);
+        const guessedGenreIds = guessed.genres.map((g) => g.genre.id).filter((_, i) => i < 3);
+        const targetDescriptors = daily.album.descriptors.filter((_, i) => i < 3);
+        const guessedDescriptors = guessed.descriptors.filter((_, i) => i < 3);
+
+        return {
+            album: guessed,
+            year: compareYear(guessed.year, daily.album.year),
+            artists: compareArray(guessedArtistIds, targetArtistIds),
+            genres: {
+                status: compareArray(guessedGenreIds, targetGenreIds).status,
+                values: guessed.genres.map((genre) => genre.genre.name),
+            },
+            rymRating: compareRating(guessed.rymRating, daily.album.rymRating),
+            rymRanking: compareRanking(guessed.rymRanking, daily.album.rymRanking),
+            descriptors: {
+                status: compareArray(guessedDescriptors, targetDescriptors).status,
+                values: guessed.descriptors,
+            },
+        };
     };
 
     private getElectableDailyAlbums = async () => {

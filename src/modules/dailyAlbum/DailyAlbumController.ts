@@ -15,18 +15,16 @@ export class DailyAlbumController {
         private logger: winston.Logger
     ) {}
 
-    getDailyAlbum = async (req: Request, res: Response) => {
+    getDailyStats = async (req: Request, res: Response) => {
         const userId = req.userId;
 
-        const { dailyAlbum, dailyAlbumTotalGuessesCount, dailyAlbumNumber, url } =
+        const { dailyAlbumTotalGuessesCount, dailyAlbumNumber } =
             await this.dailyAlbumService.getDailyAlbum();
 
         const json = {
             status: 'success',
-            message: 'Fetched daily album',
-            dailyAlbum,
+            message: 'Fetched daily album stats',
             dailyAlbumNumber,
-            dailyAlbumUrl: url,
             dailyAlbumTotalGuessesCount,
         };
 
@@ -44,19 +42,19 @@ export class DailyAlbumController {
     };
 
     getUserDailyAlbumStatistics = async (req: Request, res: Response) => {
-        const albumId = req.query.albumId;
+        const date = req.query.date ?? new Date().toUTCString();
         const userId = req.userId;
 
         if (!userId) {
             throw new AuthError(401, 'User is not authenticated');
         }
 
-        if (!albumId || typeof albumId !== 'string') {
-            throw new ValidationError(400, 'AlbumId was not provided or has an invalid format');
+        if (date && typeof date !== 'string') {
+            throw new ValidationError(400, 'Date was not provided or has an invalid format');
         }
 
         const { userDailyAlbumStatistics, totalGuesses } =
-            await this.dailyAlbumService.getUserDailyAlbumStatistics(userId, albumId);
+            await this.dailyAlbumService.getUserDailyAlbumStatistics(userId, date);
 
         if (!(await this.dailyAlbumService.checkIfUserGuessedYesterdaysAlbum(userId))) {
             if (!userDailyAlbumStatistics) {
@@ -124,11 +122,13 @@ export class DailyAlbumController {
         }
 
         const userTry = await this.dailyAlbumService.addDailyAlbumTry(userId, guessedAlbumId);
+        const row = await this.dailyAlbumService.buildGuessRow(guessedAlbumId);
 
         return res.status(200).json({
             status: 'success',
             message: 'User try registered',
             userTry,
+            row,
         });
     };
 
@@ -216,6 +216,22 @@ export class DailyAlbumController {
             status: 'success',
             message: `Set ${dateObj.toUTCString()} daily album`,
             dailyAlbum,
+        });
+    };
+
+    buildGuessRow = async (req: Request, res: Response) => {
+        const albumId = req.params.albumId;
+
+        if (!albumId || typeof albumId !== 'string') {
+            throw new ValidationError(400, 'AlbumId was not provided or has an invalid format');
+        }
+
+        const row = await this.dailyAlbumService.buildGuessRow(albumId);
+
+        return res.status(200).json({
+            status: 'success',
+            message: 'Row built',
+            row,
         });
     };
 }
