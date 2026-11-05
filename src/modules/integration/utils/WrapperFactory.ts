@@ -2,10 +2,10 @@ import winston from 'winston';
 import { Account } from '../../../generated/prisma/client';
 import IntegrationError from '../errors/IntegrationError';
 import { LastfmWrapper } from '../providers/wrappers/LastfmWrapper';
-import { SpotifyWrapper } from '../providers/wrappers/SpotifyWrapper';
 import { IProviderConnector } from '../types/IProviderConnector';
 import { MusicBrainzWrapper } from './MusicBrainzWrapper';
 import IntegrationService from '../IntegrationService';
+import ValidationError from '../../../shared/errors/ValidationError';
 
 export class WrapperFactory {
     private musicBrainz: MusicBrainzWrapper;
@@ -24,15 +24,7 @@ export class WrapperFactory {
         }
 
         if (provider.provider === 'spotify') {
-            const wrapper = new SpotifyWrapper(
-                provider,
-                this.musicBrainz,
-                userId,
-                this.integrationService,
-                this.logger
-            );
-            this.wrapperCache.set(cacheKey, wrapper);
-            return wrapper;
+            throw new ValidationError(403, 'Provider is obsolete, please try another one instead');
         }
 
         if (provider.provider === 'lastfm') {

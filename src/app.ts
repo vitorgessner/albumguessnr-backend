@@ -56,7 +56,6 @@ import { ProviderRepository } from './modules/integration/providers/ProviderRepo
 import { ProviderService } from './modules/integration/providers/ProviderService.js';
 import { ProviderController } from './modules/integration/providers/ProviderController.js';
 import providerRoutes from './modules/integration/providers/providerRoutes.js';
-import { spotifyConsumer } from './modules/integration/providers/consumers/SpotifyConsumer.js';
 import { lastfmConsumer } from './modules/integration/providers/consumers/LastfmConsumer.js';
 import { WrapperFactory } from './modules/integration/utils/WrapperFactory.js';
 import { DailyAlbumRepository } from './modules/dailyAlbum/DailyAlbumRepository.js';
@@ -248,13 +247,6 @@ export const getApp = (): { app: Application; startConsumers: () => Promise<void
 
     const startConsumers = async () => {
         await Promise.all([
-            spotifyConsumer('sync.spotify.initial', integrationService, wrapperFactory, logger),
-            spotifyConsumer(
-                'sync.spotify.continuation',
-                integrationService,
-                wrapperFactory,
-                logger
-            ),
             lastfmConsumer('sync.lastfm.initial', integrationService, wrapperFactory, logger),
             lastfmConsumer('sync.lastfm.continuation', integrationService, wrapperFactory, logger),
         ]);

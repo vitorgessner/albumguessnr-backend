@@ -1,6 +1,5 @@
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
-import { Profile, Strategy as SpotifyStrategy } from 'passport-spotify';
 import { Strategy as LastfmStrategy } from 'passport-lastfm';
 import { env } from '../../app';
 import { Router, Request } from 'express';
@@ -43,30 +42,6 @@ export const oAuthRoutes = (authService: AuthService) => {
                     cb(null, data);
                 } catch (err) {
                     cb(err);
-                }
-            }
-        )
-    );
-
-    passport.use(
-        new SpotifyStrategy(
-            {
-                clientID: env.SPOTIFY_CLIENT_ID,
-                clientSecret: env.SPOTIFY_CLIENT_SECRET,
-                callbackURL: env.SPOTIFY_OAUTH_REDIRECT_URL,
-                scope: [
-                    'user-read-email',
-                    'user-read-private',
-                    'user-library-read',
-                    'user-top-read',
-                ],
-                showDialog: true,
-            },
-            async (accessToken, refreshToken, expires_at, profile, cb) => {
-                try {
-                    return cb(null, { accessToken, refreshToken, expires_at, profile });
-                } catch (err) {
-                    cb(err as Error);
                 }
             }
         )
@@ -153,107 +128,6 @@ export const oAuthRoutes = (authService: AuthService) => {
             }
         )(req, res, next);
     });
-
-    router.get('/login/spotify', authMiddleware, (req: Request, res) => {
-        const state = req.userId;
-
-        const scope = [
-            'user-read-email',
-            'user-read-private',
-            'user-library-read',
-            'user-top-read',
-        ].join(' ');
-
-        const spotifyAuthUrl =
-            'https://accounts.spotify.com/authorize' +
-            '?response_type=code' +
-            `&redirect_uri=${encodeURIComponent(env.SPOTIFY_OAUTH_REDIRECT_URL)}` +
-            `&scope=${encodeURIComponent(scope)}` +
-            `&state=${state}` +
-            `&client_id=${encodeURIComponent(env.SPOTIFY_CLIENT_ID)}` +
-            '&show_dialog=true';
-
-        res.redirect(spotifyAuthUrl);
-    });
-
-    router.get('/spotify/callback', (req: Request, res, next) =>
-        passport.authenticate(
-            'spotify',
-            {
-                failureRedirect: env.FRONTEND_URL + '/auth/login',
-                failureMessage: true,
-            },
-            async function (
-                err: unknown,
-                user: {
-                    accessToken: string;
-                    refreshToken: string;
-                    expires_at: number;
-                    profile: Profile;
-                },
-                info?: { message?: string }
-            ) {
-                if (err || !user)
-                    return res.redirect(env.FRONTEND_URL + '/auth/login?message=Auth failed');
-
-                if (info && info.message) {
-                    const errorMessage = info.message ? info.message : 'Auth failed';
-                    return res.redirect(
-                        `${env.FRONTEND_URL}/auth/login?message=${encodeURIComponent(errorMessage)}`
-                    );
-                }
-
-                const userId = req.query.state;
-
-                if (!userId) {
-                    console.error('userId not found');
-                    return res.redirect(env.FRONTEND_URL + '/auth/login?message=missing_user');
-                }
-
-                if (typeof userId !== 'string') {
-                    console.error('userId is not valid');
-                    return res.redirect(env.FRONTEND_URL + '/auth/login?message=invalid_userId');
-                }
-
-                try {
-                    const response = await authService.createAccount(userId, {
-                        provider: 'spotify',
-                        providerAccountId: user.profile.id,
-                        userId: userId,
-                        username: user.profile.username,
-                        accessToken: user.accessToken,
-                        refreshToken: user.refreshToken,
-                        displayUsername: user.profile.displayName,
-                        expiresAt: new Date(
-                            new Date().setSeconds(new Date().getSeconds() + user.expires_at)
-                        ),
-                    });
-
-                    const me = await authService.me(userId);
-
-                    if (response.status === 'error') {
-                        return res.redirect(
-                            env.FRONTEND_URL +
-                                // eslint-disable-next-line max-len
-                                `/profile/${me?.profile?.displayUsername}/edit?error=${response.message}`
-                        );
-                    }
-
-                    await authService.setMainProvider(userId, response.account.id);
-
-                    return res.redirect(
-                        env.FRONTEND_URL +
-                            '/profile/' +
-                            me?.profile?.displayUsername +
-                            '/edit?sync=true'
-                    );
-                } catch (error) {
-                    console.error('Failed to create account: ', error);
-                    return res.redirect(env.FRONTEND_URL + '/auth/login');
-                }
-            }
-        )(req, res, next)
-    );
 
     router.get('/login/lastfm', authMiddleware, (req: Request, res, next) => {
         res.cookie('lastfm_auth_userId', req.userId, {
