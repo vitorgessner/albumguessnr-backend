@@ -1,11 +1,11 @@
 import { prisma } from '../../config/prisma';
 import { Prisma } from '../../generated/prisma/client';
-import { isToday } from '../../shared/utils/isToday';
+import { isSameDate, isToday } from '../../shared/utils/isToday';
 import { isYesterday } from '../../shared/utils/isYesterday';
 import { DailyError } from './errors/DailyError';
 
 export class DailyAlbumRepository {
-    getDailyAlbum = async () => {
+    getDailyAlbum = async (date?: string) => {
         const newestDailyAlbums = await prisma.dailyAlbum.findMany({
             take: 50,
             orderBy: {
@@ -28,6 +28,13 @@ export class DailyAlbumRepository {
                 },
             },
         });
+
+        if (date) {
+            const dailyAlbum = newestDailyAlbums.find((album) =>
+                isSameDate(album.date, new Date(date))
+            );
+            return dailyAlbum;
+        }
 
         const dailyAlbum = newestDailyAlbums.find((album) => isToday(album.date));
         return dailyAlbum;
@@ -147,6 +154,25 @@ export class DailyAlbumRepository {
                     },
                 },
             },
+            omit: {
+                dailyAlbumId: true,
+            },
+        });
+    };
+
+    getAllUserDailyAlbumStatistics = async (userId: string) => {
+        return await prisma.user.findUnique({
+            where: {
+                id: userId,
+            },
+            select: {
+                dailyAlbumGuesses: {
+                    include: {
+                        userTries: true,
+                        dailyAlbum: true,
+                    },
+                },
+            },
         });
     };
 
@@ -221,6 +247,7 @@ export class DailyAlbumRepository {
             where: {
                 userDailyAlbum: {
                     userId,
+                    dailyAlbumId,
                 },
             },
             orderBy: { nthTry: 'desc' },
@@ -259,6 +286,16 @@ export class DailyAlbumRepository {
                         nthTry: (nthTry ?? 0) + 1,
                     },
                 },
+            },
+            include: {
+                userTries: {
+                    select: {
+                        albumGuessId: true,
+                    },
+                },
+            },
+            omit: {
+                dailyAlbumId: true,
             },
         });
     };
