@@ -75,6 +75,14 @@ export class SpotifyWrapper implements IProviderConnector {
         };
     };
 
+    getSyncingId = async () => {
+        const lastSynced = await this.integrationService.getLastSynced(
+            this.account.provider,
+            this.account.providerAccountId
+        );
+        return lastSynced?.syncingId;
+    };
+
     fetchAlbums = async (
         syncCursor: number = this.getInitialCursor()
     ): Promise<{
@@ -131,6 +139,24 @@ export class SpotifyWrapper implements IProviderConnector {
         i: number
     ): Promise<AlbumFormatResult> => {
         try {
+            const syncStats = await this.integrationService.getLastSynced(
+                this.account.provider,
+                this.account.providerAccountId
+            );
+
+            if (
+                Date.now() / 1000 - (syncStats?.syncingTimestamp?.getTime() ?? Date.now()) / 1000 >=
+                15
+            ) {
+                await this.integrationService.updateLastSynced(
+                    this.account.provider,
+                    this.account.providerAccountId,
+                    {
+                        syncingTimestamp: new Date(),
+                    }
+                );
+            }
+
             const childLogger = this.instantiateChildLogger(this.userId, album);
             if (!album.images[0]) {
                 throw new IntegrationError(404, 'Cover_url not found');

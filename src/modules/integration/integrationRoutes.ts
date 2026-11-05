@@ -6,6 +6,10 @@ const integrationRoutes = (controller: IntegrationController) => {
 
     router.get('/albums/', (req: Request, res: Response) => controller.getAlbums(req, res));
 
+    router.get('/albums/quantity', (req: Request, res: Response) =>
+        controller.getAlbumsQuantity(req, res)
+    );
+
     return router;
 };
 

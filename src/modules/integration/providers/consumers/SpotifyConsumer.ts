@@ -30,12 +30,15 @@ export const spotifyConsumer = async (
         try {
             console.log('🎵 Processing Spotify data: ', msg?.content.toString());
 
-            const { userId, providerAccountId } = JSON.parse(msg.content.toString());
+            const { userId, providerAccountId, syncingId } = JSON.parse(msg.content.toString());
 
             const mainProvider = await integrationService.findMainProvider(userId);
 
-            if (mainProvider.providerAccountId !== providerAccountId) {
-                logger.info('Main provider was changed, skipping current syncing');
+            if (
+                mainProvider.providerAccountId !== providerAccountId ||
+                mainProvider.syncingId !== syncingId
+            ) {
+                logger.info('Main provider or syncingId was changed, skipping current syncing');
                 return channel.ack(msg);
             }
 
@@ -44,11 +47,12 @@ export const spotifyConsumer = async (
             const hasNextPage = await integrationService.fetchUserAlbums(userId, spotifyWrapper);
 
             if (hasNextPage) {
+                const newSyncingId = (await integrationService.findMainProvider(userId)).syncingId;
                 const newMessage = Buffer.from(
                     JSON.stringify({
                         userId,
                         providerAccountId: mainProvider.providerAccountId,
-                        syncingId: mainProvider.syncingId,
+                        syncingId: newSyncingId,
                     })
                 );
                 const published = channel.publish(
@@ -62,6 +66,13 @@ export const spotifyConsumer = async (
                     return channel.ack(msg);
                 }
 
+                await integrationService.updateLastSynced(
+                    mainProvider.provider,
+                    mainProvider.providerAccountId,
+                    {
+                        syncingTimestamp: new Date(),
+                    }
+                );
                 logger.info(` [x] Sent sync.${mainProvider.provider}.continuation`);
                 return channel.ack(msg);
             }

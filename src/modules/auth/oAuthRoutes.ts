@@ -154,12 +154,26 @@ export const oAuthRoutes = (authService: AuthService) => {
         )(req, res, next);
     });
 
-    router.get('/login/spotify', authMiddleware, (req: Request, res, next) => {
+    router.get('/login/spotify', authMiddleware, (req: Request, res) => {
         const state = req.userId;
 
-        passport.authenticate('spotify', {
-            state,
-        })(req, res, next);
+        const scope = [
+            'user-read-email',
+            'user-read-private',
+            'user-library-read',
+            'user-top-read',
+        ].join(' ');
+
+        const spotifyAuthUrl =
+            'https://accounts.spotify.com/authorize' +
+            '?response_type=code' +
+            `&redirect_uri=${encodeURIComponent(env.SPOTIFY_OAUTH_REDIRECT_URL)}` +
+            `&scope=${encodeURIComponent(scope)}` +
+            `&state=${state}` +
+            `&client_id=${encodeURIComponent(env.SPOTIFY_CLIENT_ID)}` +
+            '&show_dialog=true';
+
+        res.redirect(spotifyAuthUrl);
     });
 
     router.get('/spotify/callback', (req: Request, res, next) =>
@@ -202,7 +216,7 @@ export const oAuthRoutes = (authService: AuthService) => {
                 }
 
                 try {
-                    const response = await authService.createAccount({
+                    const response = await authService.createAccount(userId, {
                         provider: 'spotify',
                         providerAccountId: user.profile.id,
                         userId: userId,
@@ -215,11 +229,23 @@ export const oAuthRoutes = (authService: AuthService) => {
                         ),
                     });
 
-                    await authService.setMainProvider(userId, response.account.id);
                     const me = await authService.me(userId);
 
+                    if (response.status === 'error') {
+                        return res.redirect(
+                            env.FRONTEND_URL +
+                                // eslint-disable-next-line max-len
+                                `/profile/${me?.profile?.displayUsername}/edit?error=${response.message}`
+                        );
+                    }
+
+                    await authService.setMainProvider(userId, response.account.id);
+
                     return res.redirect(
-                        env.FRONTEND_URL + '/profile/' + me?.profile?.displayUsername + '/edit'
+                        env.FRONTEND_URL +
+                            '/profile/' +
+                            me?.profile?.displayUsername +
+                            '/edit?sync=true'
                     );
                 } catch (error) {
                     console.error('Failed to create account: ', error);
@@ -264,7 +290,7 @@ export const oAuthRoutes = (authService: AuthService) => {
                 res.clearCookie('lastfm_auth_userId');
 
                 try {
-                    const response = await authService.createAccount({
+                    const response = await authService.createAccount(userId, {
                         provider: 'lastfm',
                         providerAccountId: user.name,
                         userId: userId,
@@ -279,7 +305,10 @@ export const oAuthRoutes = (authService: AuthService) => {
                     const me = await authService.me(userId);
 
                     return res.redirect(
-                        env.FRONTEND_URL + '/profile/' + me?.profile?.displayUsername + '/edit'
+                        env.FRONTEND_URL +
+                            '/profile/' +
+                            me?.profile?.displayUsername +
+                            '/edit?sync=true'
                     );
                 } catch (error) {
                     console.error('Failed to create account: ', error);

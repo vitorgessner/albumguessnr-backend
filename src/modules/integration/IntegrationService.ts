@@ -13,6 +13,7 @@ import type { AxiosInstance } from 'axios';
 import { ITopAlbumResponse } from './providers/interfaces/lastfmInterfaces.js';
 import { pickAlbumIds } from './utils/pickAlbums.js';
 import { lfRequest } from './providers/config/axiosInstances.js';
+import { IUpdateSync } from './types/IUpdateSync.js';
 
 const apiMap: Record<string, PossibleApis> = {
     spotify: 'SPOTIFY',
@@ -34,20 +35,9 @@ class IntegrationService {
     };
 
     findLastSyncedAt = async (userId: string) => {
-        const providers = await this.integrationRepo.findProviders(userId);
-        if (!providers || providers.accounts.length < 1) {
-            throw new AuthError(404, 'User does not have a provider connected');
-        }
+        const user = await this.integrationRepo.findLastSyncedAt(userId);
 
-        return providers.accounts
-            .filter((account) => account.lastSyncedAt)
-            .sort((a, b) => {
-                if (a.lastSyncedAt && b.lastSyncedAt) {
-                    return new Date(b.lastSyncedAt).getTime() - new Date(a.lastSyncedAt).getTime();
-                }
-
-                return 1;
-            })[0]?.lastSyncedAt;
+        return user?.lastAlbumsSync;
     };
 
     findMainProvider = async (userId: string) => {
@@ -59,7 +49,8 @@ class IntegrationService {
     };
 
     fetchUserAlbums = async (userId: string, provider: IProviderConnector) => {
-        const { provider: providerName, providerAccountId, syncingId } = provider.getProfile();
+        const { provider: providerName, providerAccountId } = provider.getProfile();
+        const syncingId = await provider.getSyncingId();
 
         const syncStats = await this.integrationRepo.getLastSyncedStats(
             providerName,
@@ -72,11 +63,25 @@ class IntegrationService {
             ? false
             : (syncStats.hadFailuresInChain ?? false);
 
+        const STALE_AFTER_MS = 4 * 60 * 1000;
+        const isStale =
+            syncStats?.syncStatus === 'SYNCING' &&
+            Date.now() - (syncStats.syncingTimestamp?.getTime() ?? Date.now()) > STALE_AFTER_MS;
+
         if (
             syncStats?.syncStatus === 'SYNCING' &&
-            (syncStats.syncingId !== syncingId || !syncStats?.syncingId)
+            (!syncStats?.syncingId || syncStats.syncingId !== syncingId) &&
+            !isStale
         ) {
+            console.log(syncingId, syncStats.syncingId);
             this.logger.warn('Already syncing');
+            return false;
+        }
+
+        const updated = await this.integrationRepo.updateSyncingId(syncStats?.syncingId);
+        if (updated.count !== 1) {
+            console.log(updated.count, syncingId, syncStats?.syncingId);
+            this.logger.warn('Killing syncing concurrency');
             return false;
         }
 
@@ -171,6 +176,7 @@ class IntegrationService {
             await this.integrationRepo.updateLastSynced(providerName, providerAccountId, {
                 syncCursor,
                 hadFailuresInChain: hadFailuresBeforeThisPage || rejectedAlbums.length > 0,
+                syncingTimestamp: new Date(),
             });
         }
 
@@ -191,6 +197,15 @@ class IntegrationService {
 
         const byId = new Map(albums.map((a) => [a.albumId, a]));
         return ids.map((i) => byId.get(i)!).filter(Boolean);
+    };
+
+    getAlbumsQuantity = async (userId: string) => {
+        const user = await this.profileRepo.findByUserId(userId);
+        if (!user) throw new IntegrationError(404, 'User not found');
+
+        const quantity = await this.integrationRepo.countUserAlbums(userId);
+
+        return quantity;
     };
 
     editTokens = async (
@@ -320,6 +335,16 @@ class IntegrationService {
                 })
             );
         }
+    };
+
+    getLastSynced = async (provider: string, providerId: string) => {
+        return await this.integrationRepo.getLastSyncedStats(provider, providerId);
+    };
+
+    updateLastSynced = async (provider: string, providerId: string, data: Partial<IUpdateSync>) => {
+        return await this.integrationRepo.updateLastSynced(provider, providerId, {
+            ...data,
+        });
     };
 
     private instantiateChildLogger = (userId: string, album: INormalizedAlbum) => {
