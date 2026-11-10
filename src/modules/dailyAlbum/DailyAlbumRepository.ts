@@ -292,17 +292,11 @@ export class DailyAlbumRepository {
         });
     };
 
-    addDailyAlbum = async (
-        albumId: string,
-        date: string,
-        lastfmData: { lastfmListeners: string; lastfmPlaycount: string }
-    ) => {
+    addDailyAlbum = async (albumId: string, date: string) => {
         return await prisma.dailyAlbum.create({
             data: {
                 albumId,
                 date: new Date(date),
-                lastfmListeners: lastfmData.lastfmListeners,
-                lastfmPlaycount: lastfmData.lastfmPlaycount,
             },
         });
     };

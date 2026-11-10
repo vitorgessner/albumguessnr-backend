@@ -22,7 +22,6 @@ export interface DailyAlbum {
         normalizedName: string;
         normalizedArtist: string;
         year: string | null;
-        cover_url: string;
         rymRating: number | null;
         rymRanking: number | null;
         descriptors: string[];
@@ -50,7 +49,6 @@ export interface AlbumCandidate {
     normalizedName: string;
     normalizedArtist: string;
     year: string | null;
-    cover_url: string;
     rymRating: number | null;
     rymRanking: number | null;
     descriptors: string[];

@@ -64,7 +64,8 @@ export const normalizeTrackName = (name: string): string => {
     return nameWithoutEdition.trim().toLowerCase();
 };
 
-export const normalizeArtistName = (name: string): string => {
+export const normalizeArtistName = (name?: string): string => {
+    if (!name) return '';
     const nameWithoutEdition = name.replace(FEAT_REGEX, '').replace(EDITION_REGEX, '');
     return nameWithoutEdition.trim().toLowerCase();
 };

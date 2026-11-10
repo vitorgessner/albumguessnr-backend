@@ -4,12 +4,11 @@ export interface INormalizedAlbum {
     normalizedName: string;
     normalizedArtist: string;
     year: string | null;
-    cover_url: string;
     genres: INormalizedTag[];
     artists: INormalizedArtist[];
     tracks: INormalizedTrack[];
     familiarityScore: number;
-    playcount: number | null;
+    hasCoverUrl: 'release-group' | 'release';
 }
 
 export interface ISavedAlbum {
@@ -19,7 +18,6 @@ export interface ISavedAlbum {
     normalizedName: string;
     normalizedArtist: string;
     year: string | null;
-    cover_url: string;
 }
 
 export interface INormalizedArtist {

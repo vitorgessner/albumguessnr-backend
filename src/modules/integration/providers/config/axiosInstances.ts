@@ -1,7 +1,7 @@
 import axios, { AxiosError } from 'axios';
 import { env } from '../../../../app';
 import { createRetryInterceptor } from '../../utils/createRetryInterceptor';
-import { lastfmQueue, musicBrainzQueue } from './rateLimiters';
+import { coverArtQueue, lastfmQueue, musicBrainzQueue } from './rateLimiters';
 
 declare module 'axios' {
     export interface InternalAxiosRequestConfig {
@@ -23,7 +23,7 @@ export const getApiInstances = () => {
     });
 
     const musicBrainzAxios = axios.create({
-        baseURL: 'https://musicbrainz.org/ws/2/release-group',
+        baseURL: 'https://musicbrainz.org/ws/2',
         params: {
             fmt: 'json',
         },
@@ -60,3 +60,5 @@ export const lfRequest = <T>(fn: () => Promise<T>) =>
             }
         }
     });
+
+export const coverArtRequest = <T>(fn: () => Promise<T>) => coverArtQueue.add(fn);

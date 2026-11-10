@@ -10,7 +10,6 @@ export interface Artist {
 }
 
 export interface Album {
-    cover_url: string;
     id: string;
     mbid: string | null;
     name: string;

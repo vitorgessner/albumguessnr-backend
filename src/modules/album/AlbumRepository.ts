@@ -35,6 +35,14 @@ class AlbumRepository {
         });
     };
 
+    getByMbid = async (mbid: string) => {
+        return await prisma.album.findUnique({
+            where: {
+                mbid,
+            },
+        });
+    };
+
     getByTitle = async (title: string) => {
         return await prisma.album.findMany({
             where: {
@@ -167,7 +175,7 @@ class AlbumRepository {
                 normalizedName: data.normalizedName,
                 normalizedArtist: data.normalizedArtist,
                 year: data.year ?? null,
-                cover_url: data.cover_url,
+                hasCoverUrl: data.hasCoverUrl || 'FALSE',
                 genres: {
                     create: genres.map((g) => ({
                         genre: {
@@ -233,7 +241,6 @@ class AlbumRepository {
                 normalizedName: data.normalizedName,
                 normalizedArtist: data.normalizedArtist,
                 year: data.year ?? null,
-                cover_url: data.cover_url,
                 genres: {
                     create: genres.map((g) => ({
                         genre: {

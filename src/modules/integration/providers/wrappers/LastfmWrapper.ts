@@ -1,38 +1,31 @@
-import winston from 'winston';
 import { Account } from '../../../../generated/prisma/client';
 import { INormalizedTag, INormalizedTrack } from '../../../album/types/album';
 import IntegrationError from '../../errors/IntegrationError';
 import { IProviderConnector } from '../../types/IProviderConnector';
 import { ProfileDTO } from '../../types/ProfileDTO';
-import {
-    normalizeAlbumName,
-    normalizeArtistName,
-    normalizeTagName,
-    normalizeTrackName,
-} from '../../utils/normalize';
-import { MusicBrainzWrapper } from '../../utils/MusicBrainzWrapper';
-import { IAlbumInfo, ITopAlbumResponse, ITopAlbumsResponse } from '../interfaces/lastfmInterfaces';
+import { normalizeAlbumName, normalizeArtistName } from '../../utils/normalize';
+import { ITopAlbumResponse, ITopAlbumsResponse } from '../interfaces/lastfmInterfaces';
 import { IMBAlbum } from '../interfaces/musicBrainzInterfaces';
 import { getApiInstances, lfRequest } from '../config/axiosInstances';
-import { sanitizeError } from '../../../../shared/utils/sanitizeCause';
 import { AlbumFormatResult } from '../interfaces/AlbumFormatResult';
 import IntegrationService from '../../IntegrationService';
 import { md5 } from '../../../../shared/utils/md5';
 import { env } from '../../../../app';
 import AuthError from '../../../auth/errors/AuthError';
+import { logger } from '../../../../config/logger/logger';
+import { musicBrainzWrapper } from '../../utils/MusicBrainzWrapper';
+import { sanitizeError } from '../../../../shared/utils/sanitizeCause';
 
 export class LastfmWrapper implements IProviderConnector {
     private lastfmAxios;
     private totalPages: number = 1;
     private musicBrainzCache = new Map<string, IMBAlbum | undefined | unknown>();
+    private musicBrainz = musicBrainzWrapper;
     constructor(
         private account: Account,
-        private musicBrainz: MusicBrainzWrapper,
         private userId: string,
-        private integrationService: IntegrationService,
-        private logger: winston.Logger
+        private integrationService: IntegrationService
     ) {
-        this.logger = logger;
         const setup = getApiInstances();
         this.lastfmAxios = setup.lastfmAxios;
     }
@@ -121,16 +114,14 @@ export class LastfmWrapper implements IProviderConnector {
         album: ITopAlbumResponse,
         i: number
     ): Promise<AlbumFormatResult> => {
+        console.log('formatting album: ', album.name);
         try {
             const syncStats = await this.integrationService.getLastSynced(
                 this.account.provider,
                 this.account.providerAccountId
             );
 
-            if (
-                Date.now() / 1000 - (syncStats?.syncingTimestamp?.getTime() ?? Date.now()) / 1000 >=
-                15
-            ) {
+            if (this.passed15Seconds(syncStats?.syncingTimestamp)) {
                 await this.integrationService.updateLastSynced(
                     this.account.provider,
                     this.account.providerAccountId,
@@ -142,20 +133,18 @@ export class LastfmWrapper implements IProviderConnector {
 
             const childLogger = this.instantiateChildLogger(this.userId, album);
 
-            const normalizedArtist = normalizeArtistName(album.artist.name);
-            const normalizedTitle = normalizeAlbumName(album.name);
-
-            const savedAlbum = await this.integrationService.findAlbumByTitleAndArtist(
-                normalizedTitle,
-                normalizedArtist
+            const savedAlbum = await this.integrationService.findAlbumOnDatabase(
+                album.mbid,
+                album.name,
+                album.artist.name
             );
 
             if (savedAlbum) {
+                console.log(savedAlbum.name, 'was already in database, syncing to user');
                 await this.integrationService.syncAlbum(
                     this.userId,
                     {
                         details: savedAlbum,
-                        playcount: Number(album.playcount),
                         familiarityScore: this.calculateFamiliarityScore(i),
                     },
                     childLogger,
@@ -164,59 +153,65 @@ export class LastfmWrapper implements IProviderConnector {
                 return { status: 'synced' };
             }
 
-            if (!album.image || !album.image[0]) {
-                await this.integrationService.saveFailedAlbumSync(
-                    {
-                        artist: album.artist.name,
-                        name: album.name,
-                        mbid: album.mbid,
-                        normalizedAlbum: normalizeAlbumName(album.name),
-                    },
-                    this.userId,
-                    'lastfm',
-                    childLogger,
-                    'Album returned no cover image'
-                );
-                throw new IntegrationError(404, 'Cover_url not found');
-            }
-
-            const cover_url = this.getCoverUrl(album);
-
-            const musicBrainzAlbum = await this.fetchMusicBrainzAlbum(
+            const musicBrainzAlbumModel = await this.fetchMusicBrainzAlbum(
+                album.mbid,
                 album.name,
-                album.artist.name,
-                childLogger
+                album.artist.name
             );
 
-            const hasNormalizedArtists = await this.normalizeArtists(musicBrainzAlbum);
+            if (musicBrainzAlbumModel instanceof Error || !musicBrainzAlbumModel) {
+                console.log(album.name, 'not found on musicbrainz');
+                return {
+                    status: 'failed',
+                    rawAlbum: {
+                        name: album.name,
+                        mbid: album.mbid,
+                        artist: album.artist.name,
+                        normalizedAlbum: normalizeAlbumName(album.name),
+                    },
+                    error: musicBrainzAlbumModel,
+                };
+            }
+            const { musicBrainzAlbum, tracks, genres, year } = musicBrainzAlbumModel;
+            let { hasCoverUrl, mbid } = musicBrainzAlbumModel;
 
-            const normalizedArtists =
-                hasNormalizedArtists && hasNormalizedArtists.length >= 1
-                    ? hasNormalizedArtists
-                    : [
-                          {
-                              mbid: album.artist.mbid,
-                              name: album.artist.name,
-                              normalizedName: normalizeArtistName(album.artist.name),
-                          },
-                      ];
-
-            const normalizedMusicBrainzArtist = normalizedArtists
-                ?.map((artist) => artist.normalizedName)
-                .join(', ');
-
-            const savedAlbumAfterMusicBrainz =
-                await this.integrationService.findAlbumByTitleAndArtist(
-                    normalizedTitle,
-                    normalizedMusicBrainzArtist
+            if (hasCoverUrl === 'try release-group') {
+                const response = await this.musicBrainz.fetchReleaseGroupByName(
+                    album.name,
+                    album.artist.name
                 );
 
-            if (savedAlbumAfterMusicBrainz) {
+                const releaseGroupId = response.data['release-groups'][0]?.id;
+                hasCoverUrl = await this.integrationService.hasCoverUrl(releaseGroupId);
+                mbid = releaseGroupId;
+            }
+
+            if (!hasCoverUrl) {
+                console.log(musicBrainzAlbum.title, 'has not a cover_url');
+                return {
+                    status: 'failed',
+                    rawAlbum: {
+                        name: album.name,
+                        mbid: album.mbid,
+                        artist: album.artist.name,
+                        normalizedAlbum: normalizeAlbumName(album.name),
+                    },
+                    error: new IntegrationError(404, 'Cover image not found'),
+                };
+            }
+
+            const savedMusicBrainzAlbum =
+                await this.findMusicBrainzAlbumOnDatabase(musicBrainzAlbum);
+
+            if (savedMusicBrainzAlbum) {
+                console.log(
+                    savedMusicBrainzAlbum.name,
+                    'was found in the database after searching it on musicbrainz'
+                );
                 await this.integrationService.syncAlbum(
                     this.userId,
                     {
-                        details: savedAlbumAfterMusicBrainz,
-                        playcount: Number(album.playcount),
+                        details: savedMusicBrainzAlbum,
                         familiarityScore: this.calculateFamiliarityScore(i),
                     },
                     childLogger,
@@ -225,39 +220,30 @@ export class LastfmWrapper implements IProviderConnector {
                 return { status: 'synced' };
             }
 
-            const lastfmAlbumInfo = album.mbid
-                ? await this.fetchInfoWithMbid(album.mbid, childLogger)
-                : await this.fetchInfoWithAlbumData(
-                      normalizeAlbumName(album.name),
-                      normalizeArtistName(album.artist.name),
-                      childLogger
-                  );
-
-            const tracks = await this.fetchAlbumTracks(lastfmAlbumInfo, childLogger);
-            const genres = await this.fetchAlbumTags(
-                musicBrainzAlbum,
-                lastfmAlbumInfo,
-                childLogger
-            );
-
-            const year = musicBrainzAlbum ? this.getMusicBrainzAlbumYear(musicBrainzAlbum) : null;
+            const normalizedTracks = await this.getMusicBrainzTracks(tracks, musicBrainzAlbum);
+            const normalizedGenres = await this.getMusicBrainzGenres(genres, musicBrainzAlbum);
+            const normalizedYear = await this.getReleaseDateYear(year);
 
             const normalizedAlbum = {
                 name: album.name,
-                cover_url,
-                mbid: album.mbid,
-                year,
-                normalizedName: normalizeAlbumName(album.name),
-                artists: normalizedArtists,
-                normalizedArtist: normalizedMusicBrainzArtist,
-                tracks,
-                genres,
-                playcount: Number(album.playcount),
+                mbid:
+                    mbid || musicBrainzAlbum.releases?.[0]?.id || musicBrainzAlbum.id || album.mbid,
+                year: normalizedYear ?? null,
+                normalizedName: normalizeAlbumName(musicBrainzAlbum.title),
+                artists: this.normalizeArtists(musicBrainzAlbum),
+                normalizedArtist: this.getNormalizedArtistsString(musicBrainzAlbum) ?? '',
+                tracks: normalizedTracks,
+                genres: normalizedGenres,
                 familiarityScore: this.calculateFamiliarityScore(i),
+                hasCoverUrl,
             };
 
-            return { status: 'to create', album: normalizedAlbum };
+            return {
+                status: 'to create',
+                album: normalizedAlbum,
+            };
         } catch (err) {
+            logger.error(sanitizeError(err));
             const rawAlbum = {
                 name: album.name,
                 mbid: album.mbid,
@@ -270,84 +256,52 @@ export class LastfmWrapper implements IProviderConnector {
         }
     };
 
-    getCoverUrl = (album: ITopAlbumResponse | IAlbumInfo): string => {
-        const cover_url = album.image[album.image.length - 1]?.['#text'];
-        if (!cover_url) {
-            throw new IntegrationError(404, 'Cover_url not found');
-        }
-
-        return cover_url;
-    };
-
-    private fetchMusicBrainzAlbum = async (
+    fetchMusicBrainzAlbum = async (
+        mbid: string | undefined,
         title: string,
-        artist: string,
-        logger: winston.Logger
-    ): Promise<IMBAlbum | undefined> => {
-        const cacheKey = `${normalizeArtistName(artist)}:${normalizeAlbumName(title)}`;
+        artist: string
+    ): Promise<ReturnType<typeof this.musicBrainz.fetchAlbum> | Error> => {
+        const cacheKey = mbid
+            ? `${mbid}`
+            : `${normalizeArtistName(artist)}:${normalizeAlbumName(title)}`;
 
         if (this.musicBrainzCache.has(cacheKey)) {
+            console.log(artist, title, ' was cached');
             const cached = this.musicBrainzCache.get(cacheKey);
-            if (cached instanceof Error) {
-                await this.integrationService.saveFailedAlbumSync(
-                    {
-                        artist,
-                        mbid: null,
-                        name: title,
-                        normalizedAlbum: normalizeAlbumName(title),
-                    },
-                    this.userId,
-                    'lastfm',
-                    logger,
-                    `Failed to fetch album from MusicBrainz. Error: ${cached.stack}`
-                );
-                throw cached;
-            }
-            return cached as IMBAlbum | undefined;
+            return cached as Promise<ReturnType<typeof this.musicBrainz.fetchAlbum> | Error>;
         }
 
+        const promise = this.musicBrainz
+            .fetchAlbum(mbid, title, artist)
+            .then((res) => res ?? new IntegrationError(404, 'Album not found on MusicBrainz'))
+            .catch((err) => err as Error);
+
+        this.musicBrainzCache.set(cacheKey, promise);
+        return promise;
+    };
+
+    fetchAlbumTracks = async (musicBrainzAlbum: IMBAlbum): Promise<INormalizedTrack[]> => {
         try {
-            const musicBrainzAlbum = await this.musicBrainz.fetchAlbum(title, artist);
-            if (!musicBrainzAlbum) {
-                await this.integrationService.saveFailedAlbumSync(
-                    {
-                        artist,
-                        mbid: null,
-                        name: title,
-                        normalizedAlbum: title,
-                    },
-                    this.userId,
-                    'lastfm',
-                    logger,
-                    'Album not found on MusicBrainz (impact year, tags and maybe artists)'
-                );
-                logger.warn(
-                    new IntegrationError(404, 'Album not found on MusicBrainz (impact tags)')
-                );
-            }
-
-            this.musicBrainzCache.set(cacheKey, musicBrainzAlbum);
-            return musicBrainzAlbum;
-        } catch (error) {
-            this.musicBrainzCache.set(cacheKey, error);
-            await this.integrationService.saveFailedAlbumSync(
-                {
-                    artist,
-                    mbid: null,
-                    name: title,
-                    normalizedAlbum: title,
-                },
-                this.userId,
-                'lastfm',
-                logger,
-                `Failed to fetch album from MusicBrainz. Error: ${error}`
+            return await this.musicBrainz.fetchTracks(
+                musicBrainzAlbum.releases?.[0]?.id || musicBrainzAlbum.id
             );
-            throw error;
+        } catch (err) {
+            const title = normalizeAlbumName(musicBrainzAlbum.title);
+            const artist = musicBrainzAlbum['artist-credit'][0];
+            const normalizedArtist = normalizeArtistName(artist.name || artist.artist.name);
+            logger.error(
+                `Failed to fetch tracks on album: ${title}-${normalizedArtist}. err: ${err}`
+            );
+            return [];
         }
+    };
+
+    fetchAlbumTags = async (title: string, artist?: string) => {
+        return await this.musicBrainz.fetchTags(title, artist);
     };
 
     private instantiateChildLogger = (userId?: string, album?: ITopAlbumResponse) => {
-        const childLogger = this.logger.child({
+        const childLogger = logger.child({
             requestId: userId,
             album: album?.name,
             mbid: album?.mbid,
@@ -358,197 +312,75 @@ export class LastfmWrapper implements IProviderConnector {
         return childLogger;
     };
 
-    private normalizeArtists = async (album: IMBAlbum | undefined) => {
-        if (!album) return null;
+    private normalizeArtists = (album: Omit<IMBAlbum, 'releases'> | undefined) => {
+        if (!album) return [];
 
-        const normalizedArtists = album['artist-credit'].map((artist) => {
-            return {
-                mbid: artist.artist.id,
-                name: artist.name,
-                normalizedName: normalizeArtistName(artist.name),
-            };
-        });
-
-        return normalizedArtists;
-    };
-
-    private fetchAlbumTracks = async (
-        info: IAlbumInfo | undefined,
-        logger: winston.Logger
-    ): Promise<INormalizedTrack[]> => {
-        if (!info) {
-            return [];
-        }
-
-        if (!info.tracks || !info.tracks.track) {
-            logger.warn(new IntegrationError(404, 'Album returned no tracks'));
-            return [];
-        }
-
-        if (Array.isArray(info.tracks.track) && info.tracks.track.length > 0) {
-            return info.tracks.track.map((track) => {
+        if (album['artist-credit']) {
+            const normalizedArtists = album['artist-credit'].map((artist) => {
                 return {
-                    name: track.name,
-                    normalizedName: normalizeTrackName(track.name),
+                    mbid: artist.artist.id,
+                    name: artist.name || artist.artist.name,
+                    normalizedName: normalizeArtistName(artist.name || artist.artist.name),
                 };
             });
-        }
 
-        if (!Array.isArray(info.tracks.track)) {
-            return [
-                {
-                    name: info.tracks.track.name,
-                    normalizedName: normalizeTrackName(info.tracks.track.name),
-                },
-            ];
+            return normalizedArtists;
         }
 
         return [];
     };
 
-    fetchInfoWithAlbumData = async (
-        name: string,
-        artist: string,
-        logger?: winston.Logger
-    ): Promise<IAlbumInfo | undefined> => {
-        try {
-            if (!this.account.accessToken) {
-                throw new AuthError(
-                    401,
-                    'User has not a token for Last.fm, try logging in Last.fm again'
-                );
-            }
+    private getNormalizedArtistsString = (musicBrainzAlbum: Omit<IMBAlbum, 'releases'>) => {
+        const hasNormalizedArtists = this.normalizeArtists(musicBrainzAlbum);
 
-            const trimmedAlbum = name.trim();
-            const trimmedArtist = artist.trim();
-
-            const signature = md5(
-                // eslint-disable-next-line max-len
-                `album${trimmedAlbum}api_key${env.API_KEY}artist${trimmedArtist}methodalbum.getinfosk${this.account.accessToken}${env.LASTFM_CLIENT_SECRET}`
-            );
-
-            const response = await lfRequest(() =>
-                this.lastfmAxios.get('', {
-                    params: {
-                        method: 'album.getinfo',
-                        api_sig: signature,
-                        sk: this.account.accessToken,
-                        album: trimmedAlbum,
-                        artist: trimmedArtist,
-                    },
-                })
-            );
-
-            const lastfmAlbumInfo: IAlbumInfo = response.data.album;
-
-            if (!lastfmAlbumInfo) {
-                logger?.warn(new IntegrationError(404, 'No info found on lastfm'));
-            }
-
-            return lastfmAlbumInfo;
-        } catch (err) {
-            throw new IntegrationError(500, 'Failed to fetch albums tracks', {
-                cause: sanitizeError(err),
-            });
-        }
+        return hasNormalizedArtists?.map((artist) => artist.normalizedName).join(', ');
     };
 
-    private fetchInfoWithMbid = async (
-        mbid: string,
-        logger: winston.Logger
-    ): Promise<IAlbumInfo | undefined> => {
-        try {
-            if (!this.account.accessToken) {
-                throw new AuthError(
-                    401,
-                    'User has not a token for Last.fm, try logging in Last.fm again'
-                );
-            }
+    private findMusicBrainzAlbumOnDatabase = async (musicBrainzAlbum: IMBAlbum) => {
+        const normalizedArtistsString = this.getNormalizedArtistsString(musicBrainzAlbum);
+        const normalizedTitle = normalizeAlbumName(musicBrainzAlbum.title);
 
-            const signature = md5(
-                // eslint-disable-next-line max-len
-                `api_key${env.API_KEY}mbid${mbid}methodalbum.getinfosk${this.account.accessToken}${env.LASTFM_CLIENT_SECRET}`
-            );
-
-            const response = await lfRequest(() =>
-                this.lastfmAxios.get('', {
-                    params: {
-                        method: 'album.getinfo',
-                        api_sig: signature,
-                        sk: this.account.accessToken,
-                        mbid,
-                    },
-                })
-            );
-
-            const lastfmAlbumInfo: IAlbumInfo = response.data.album;
-
-            return lastfmAlbumInfo;
-        } catch (err) {
-            logger.error(
-                new IntegrationError(500, 'Failed to fetch albums tracks', {
-                    cause: sanitizeError(err),
-                })
-            );
-            return undefined;
-        }
+        return await this.integrationService.findAlbumOnDatabase(
+            musicBrainzAlbum.releases?.[0]?.id || musicBrainzAlbum.id,
+            normalizedTitle,
+            normalizedArtistsString
+        );
     };
 
-    private fetchAlbumTags = async (
-        album: IMBAlbum | undefined,
-        lastfmAlbumInfo: IAlbumInfo | undefined,
-        logger: winston.Logger
-    ): Promise<INormalizedTag[]> => {
-        if (!album && !lastfmAlbumInfo) {
-            return [];
+    private getMusicBrainzGenres = async (
+        genres: INormalizedTag[] | null,
+        musicBrainzAlbum: Omit<IMBAlbum, 'releases'>
+    ) => {
+        console.log(musicBrainzAlbum.title, ': normalizing genres');
+        if (genres && genres.length > 0) {
+            return genres;
         }
-
-        if (album && album.tags && album.tags.length > 0) {
-            return album.tags.map((tag) => {
-                return { name: normalizeTagName(tag.name) };
-            });
-        }
-
-        if (
-            lastfmAlbumInfo &&
-            lastfmAlbumInfo.tags &&
-            lastfmAlbumInfo.tags.tag &&
-            Array.isArray(lastfmAlbumInfo.tags.tag)
-        ) {
-            return lastfmAlbumInfo.tags.tag.map((tag) => {
-                return { name: normalizeTagName(tag.name) };
-            });
-        }
-
-        if (
-            lastfmAlbumInfo &&
-            lastfmAlbumInfo.tags &&
-            lastfmAlbumInfo.tags.tag &&
-            !Array.isArray(lastfmAlbumInfo.tags.tag)
-        ) {
-            return [
-                {
-                    name: normalizeTagName(lastfmAlbumInfo.tags.tag.name),
-                },
-            ];
-        }
-        logger.warn(new IntegrationError(404, 'Album returned no tags'));
-        return [];
+        return await this.fetchAlbumTags(
+            musicBrainzAlbum.title,
+            musicBrainzAlbum['artist-credit'][0].name
+        );
     };
 
-    private getMusicBrainzAlbumYear = (musicBrainzAlbum: IMBAlbum) => {
-        return String(new Date(musicBrainzAlbum['first-release-date']).getFullYear());
+    private getMusicBrainzTracks = async (
+        tracks: INormalizedTrack[] | null,
+        musicBrainzAlbum: IMBAlbum
+    ) => {
+        console.log(musicBrainzAlbum.title, ': normalizing tracks');
+        if (tracks && tracks.length > 0) {
+            return tracks;
+        }
+        return await this.fetchAlbumTracks(musicBrainzAlbum);
     };
 
-    private getAccount = async () => {
-        return {
-            provider: this.account.provider,
-            providerAccountId: this.account.providerAccountId,
-            refreshToken: this.account.refreshToken,
-        };
+    private getReleaseDateYear = async (year: string | undefined) => {
+        return year ? year.split('-')[0] : null;
     };
 
     private calculateFamiliarityScore = (i: number) => {
         return (Math.min(this.totalPages * 50, 500) - i) / Math.min(this.totalPages * 50, 500);
+    };
+
+    private passed15Seconds = (syncingTimestamp?: Date | null) => {
+        return Date.now() / 1000 - (syncingTimestamp?.getTime() ?? Date.now()) / 1000 >= 15;
     };
 }

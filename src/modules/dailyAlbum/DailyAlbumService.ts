@@ -6,17 +6,17 @@ import {
     normalizeAlbumName,
     normalizeArtistName,
     normalizeTagName,
-    normalizeTrackName,
 } from '../integration/utils/normalize';
 import AlbumRepository, { ArtistCreateInputWithoutMbid } from '../album/AlbumRepository';
 import IntegrationService from '../integration/IntegrationService';
 import ValidationError from '../../shared/errors/ValidationError';
-import IntegrationError from '../integration/errors/IntegrationError';
-import { getApiInstances } from '../integration/providers/config/axiosInstances';
-import winston from 'winston';
 import { DailyError } from './errors/DailyError';
 import DatabaseError from '../../shared/errors/DatabaseError';
 import { compareArray, compareRanking, compareRating, compareYear } from './utils/compareFunctions';
+import { musicBrainzWrapper } from '../integration/utils/MusicBrainzWrapper';
+import { logger } from '../../config/logger/logger';
+import { PossibleAlbums } from './types/possibleAlbums';
+import { CoverUrlEnum } from '../../generated/prisma/enums';
 
 const Album = z.object({
     position: z.string().transform((val) => Number(val)),
@@ -41,14 +41,15 @@ type NormalizedDailyAlbum = {
     position: number;
     avg_rating: number;
     release_date: Date;
+    hasCoverUrl: CoverUrlEnum;
 };
 
 export class DailyAlbumService {
+    private musicBrainz = musicBrainzWrapper;
     constructor(
         private dailyAlbumRepo: DailyAlbumRepository,
         private albumRepo: AlbumRepository,
-        private integrationService: IntegrationService,
-        private logger: winston.Logger
+        private integrationService: IntegrationService
     ) {}
 
     getDailyAlbum = async () => {
@@ -67,19 +68,14 @@ export class DailyAlbumService {
             throw new ValidationError(404, `${dailyAlbum.album.name} has no artists`);
         }
 
-        const lastfmInfo = await this.getLastfmInfo(
-            dailyAlbum.album.normalizedName,
-            dailyAlbum.album.artists[0].artist.normalizedName
-        );
-
-        return { dailyAlbum, dailyAlbumTotalGuessesCount, dailyAlbumNumber, url: lastfmInfo.url };
+        return { dailyAlbum, dailyAlbumTotalGuessesCount, dailyAlbumNumber };
     };
 
     getRandomElectableAlbum = async () => {
-        const electableAlbums = await this.getElectableDailyAlbums();
+        const { electableAlbums, count } = await this.getElectableDailyAlbums();
 
-        const randomNumber = Math.floor(Math.random() * electableAlbums.count);
-        const album = electableAlbums.electableAlbums.find((_, index) => index === randomNumber);
+        const randomNumber = Math.floor(Math.random() * count);
+        const album = electableAlbums.find((_, index) => index === randomNumber);
         if (!album) {
             throw new DailyError(
                 404,
@@ -129,7 +125,7 @@ export class DailyAlbumService {
         return [...possibleAlbums, ...possibleArtists, ...possibleYears];
     };
 
-    findPossibleAlbumsByTitle = async (title: string) => {
+    findPossibleAlbumsByTitle = async (title: string): Promise<PossibleAlbums[]> => {
         const albums = (await this.albumRepo.getByTitle(title)).filter(
             (album) => !!album.rymRanking && !!album.rymRating && !!album.descriptors
         );
@@ -217,18 +213,24 @@ export class DailyAlbumService {
 
     setDailyAlbum = async (albumId: string) => {
         const album = await this.albumRepo.get(albumId);
-        if (!album) {
-            throw new DatabaseError(404, `Album with id "${albumId}" was not found`);
+        if (!album || !album.mbid) {
+            throw new DatabaseError(
+                404,
+                `Album with id "${albumId}" was not found or doesn't have mbid`
+            );
+        }
+
+        const cover_url = await this.getCoverUrl(album.mbid);
+        if (!cover_url) {
+            throw new DailyError(
+                404,
+                `${album.name}:${album.artists[0]?.artist.name} has not a cover on CAA`
+            );
         }
 
         if (!album.artists[0] || !album.artists[0].artist) {
-            throw new ValidationError(404, `${album.name} has no artists`);
+            throw new DailyError(404, `${album.name} has no artists`);
         }
-
-        const lastfmInfo = await this.getLastfmInfo(
-            album.normalizedName,
-            album.artists[0].artist.normalizedName
-        );
 
         const lastDailyAlbum = await this.dailyAlbumRepo.getLastTenDailyAlbums();
         const lastDate =
@@ -241,14 +243,11 @@ export class DailyAlbumService {
 
         const tomorrow = `${year}-${month}-${date}T00:00:00.000Z`;
 
-        const dailyAlbum = await this.dailyAlbumRepo.addDailyAlbum(albumId, tomorrow, {
-            lastfmListeners: lastfmInfo.listeners,
-            lastfmPlaycount: lastfmInfo.playcount,
-        });
+        const dailyAlbum = await this.dailyAlbumRepo.addDailyAlbum(albumId, tomorrow);
 
         await this.dailyAlbumRepo.unelectableAlbumInPool(album.id);
 
-        return { album, dailyAlbum, tomorrow };
+        return { album: { ...album, cover_url }, dailyAlbum, tomorrow };
     };
 
     saveAlbumsAndAddToPool = async () => {
@@ -257,11 +256,17 @@ export class DailyAlbumService {
         let totalProcessed = 0;
         let created = 0;
         let updated = 0;
+        let unchanged = 0;
         let failed = 0;
 
         for (const album of albums) {
+            console.log('processing album:', album.name);
             const result = await this.processAlbum(album);
             totalProcessed++;
+
+            if (result.unchanged) {
+                unchanged++;
+            }
 
             if (result.failed) {
                 failed++;
@@ -276,7 +281,7 @@ export class DailyAlbumService {
             }
         }
 
-        return { totalProcessed, created, updated, failed };
+        return { totalProcessed, created, updated, unchanged, failed };
     };
 
     addDailyAlbumTry = async (userId: string, guessedAlbumId: string) => {
@@ -320,7 +325,8 @@ export class DailyAlbumService {
     checkIfUserGuessedYesterdaysAlbum = async (userId: string) => {
         const yesterdaysAlbum = await this.dailyAlbumRepo.getYesterdaysAlbum();
         if (!yesterdaysAlbum) {
-            throw new DailyError(404, 'It was not found a daily album from yesterday');
+            // throw new DailyError(404, 'It was not found a daily album from yesterday');
+            return false;
         }
 
         const userStatistics = await this.dailyAlbumRepo.getUserDailyAlbumStatistics(
@@ -344,9 +350,10 @@ export class DailyAlbumService {
         const guessed = await this.albumRepo.get(guessedId);
         const daily = dailyAlbumModel.dailyAlbum;
 
-        if (!daily || !guessed) {
+        if (!daily || !guessed || !guessed.mbid) {
             throw new DailyError(404, 'Daily album or guessed album not found');
         }
+        const cover_url = await this.getCoverUrl(guessed.mbid);
 
         const targetArtistIds = daily.album.artists.map((a) => a.artist.id).filter((_, i) => i < 3);
         const targetGenreIds = daily.album.genres.map((g) => g.genre.id).filter((_, i) => i < 3);
@@ -357,6 +364,7 @@ export class DailyAlbumService {
 
         return {
             album: guessed,
+            cover_url,
             year: compareYear(guessed.year, daily.album.year),
             artists: compareArray(guessedArtistIds, targetArtistIds),
             genres: {
@@ -372,6 +380,10 @@ export class DailyAlbumService {
         };
     };
 
+    getCoverUrl = async (mbid: string) => {
+        return await this.integrationService.getCoverUrl(mbid);
+    };
+
     private getElectableDailyAlbums = async () => {
         const electableAlbums = await this.dailyAlbumRepo.getElectableDailyAlbums();
         if (!electableAlbums || electableAlbums.length === 0) {
@@ -381,7 +393,7 @@ export class DailyAlbumService {
         const electableDailyAlbumsCount = electableAlbums.length;
 
         if (electableDailyAlbumsCount < 10) {
-            this.logger.warn(`There are only ${electableAlbums.length} available`);
+            logger.warn(`There are only ${electableAlbums.length} available`);
         }
 
         return { electableAlbums, count: electableDailyAlbumsCount };
@@ -394,9 +406,16 @@ export class DailyAlbumService {
                 album.normalizedArtist
             );
 
-            const isAlbumInPool = dbAlbum
-                ? await this.dailyAlbumRepo.findAlbumInPool(dbAlbum.id)
-                : false;
+            if (
+                dbAlbum?.descriptors &&
+                dbAlbum.rymRanking &&
+                dbAlbum.rymRating &&
+                dbAlbum.hasCoverUrl !== 'FALSE'
+            ) {
+                return { unchanged: true };
+            }
+
+            const isAlbumInPool = await this.isAlbumInPool(dbAlbum?.id);
 
             const albumToSave = await this.saveAlbum(album);
 
@@ -410,13 +429,39 @@ export class DailyAlbumService {
 
             return { created: dbAlbum ? false : true };
         } catch (err) {
-            console.log(`Failed to process album "${album.name}":`, err);
+            await this.integrationService.saveFailedAlbumSync(
+                {
+                    name: album.name,
+                    artist: album.artists[0]?.name || '',
+                    mbid: null,
+                    normalizedAlbum:
+                        normalizeAlbumName(album.name) +
+                        ' - ' +
+                        normalizeArtistName(album.artists[0]?.name),
+                },
+                '',
+                'Daily',
+                logger,
+                err
+            );
+            console.log(`Failed to process album "${album.name}":`, (err as Error).message);
             return { failed: true };
         }
     };
 
+    private isAlbumInPool = async (albumId: string | undefined): Promise<boolean> => {
+        if (await this.dailyAlbumRepo.findAlbumInPool(albumId ?? '')) {
+            return true;
+        }
+        return false;
+    };
+
     private saveAlbum = async (album: NormalizedDailyAlbum) => {
-        const { formattedAlbum, genres, tracks } = await this.formatAlbum(album);
+        const formattedAlbumModel = await this.formatAlbum(album);
+        if (!formattedAlbumModel) {
+            throw new DailyError(404, 'Cover image not found');
+        }
+        const { formattedAlbum, genres, tracks } = formattedAlbumModel;
 
         return await this.albumRepo.upsertDailyAlbum(formattedAlbum, genres, album.artists, tracks);
     };
@@ -442,55 +487,64 @@ export class DailyAlbumService {
 
     private formatAlbum = async (album: NormalizedDailyAlbum) => {
         if (!album.artists[0]) {
-            throw new ValidationError(404, `${album.name} has no artists`);
+            throw new DailyError(404, `${album.name} has no artists`);
         }
 
-        const lastfmAxiosInstance = await this.getLastfmAxiosInstance();
-
-        const lastfmInfo = await this.integrationService.fetchInfoWithAlbumData(
-            album.normalizedName,
-            album.artists[0].normalizedName,
-            lastfmAxiosInstance
+        const musicBrainzAlbumModel = await this.musicBrainz.fetchAlbum(
+            undefined,
+            album.name,
+            album.artists[0].name
         );
-
-        if (!lastfmInfo) {
-            throw new IntegrationError(404, 'Album not found on lastfm');
+        if (!musicBrainzAlbumModel || !musicBrainzAlbumModel.musicBrainzAlbum) {
+            throw new DailyError(404, `${album.name} not found on MusicBrainz`);
         }
 
-        const cover_url = this.integrationService.getCoverUrl(lastfmInfo);
+        const { musicBrainzAlbum, tracks } = musicBrainzAlbumModel;
+        let { hasCoverUrl, mbid } = musicBrainzAlbumModel;
+        if (!hasCoverUrl || hasCoverUrl === 'try release-group') {
+            hasCoverUrl = await this.integrationService.hasCoverUrl(
+                musicBrainzAlbum.releases?.[0]?.id || musicBrainzAlbum.id
+            );
+            mbid = musicBrainzAlbum.releases?.[0]?.id || musicBrainzAlbum.id;
+
+            if (!hasCoverUrl) {
+                hasCoverUrl = await this.integrationService.hasCoverUrl(
+                    musicBrainzAlbum?.['release-group']?.id
+                );
+                mbid = musicBrainzAlbum?.['release-group']?.id || mbid;
+                if (!hasCoverUrl) {
+                    throw new DailyError(404, `${album.name} has no cover url`);
+                }
+            }
+        }
+        const coverType = {
+            'release-group': 'RELEASE_GROUP',
+            release: 'RELEASE',
+        } as const;
+
         const year = String(album.release_date.getFullYear());
-        if (!year) {
-            this.logger.warn(new ValidationError(404, `Album "${album.name}" has no year`));
-        }
 
         const formattedAlbum = {
             name: album.name,
             normalizedName: album.normalizedName,
             normalizedArtist: album.normalizedArtist,
-            mbid: lastfmInfo.mbid,
-            cover_url,
+            mbid: mbid || musicBrainzAlbum.releases?.[0]?.id || musicBrainzAlbum.id,
             year,
+            hasCoverUrl: coverType[hasCoverUrl],
         };
 
         const genres = album.primary_genres.map((genre) => {
             return { name: genre };
         });
 
-        const tracks = Array.isArray(lastfmInfo.tracks.track)
-            ? lastfmInfo.tracks.track.map((track) => {
-                  return {
-                      name: track.name,
-                      normalizedName: normalizeTrackName(track.name),
-                  };
-              })
-            : [
-                  {
-                      name: lastfmInfo.tracks.track.name,
-                      normalizedName: normalizeTrackName(lastfmInfo.tracks.track.name),
-                  },
-              ];
+        const normalizedTracks =
+            tracks && tracks.length > 0
+                ? tracks
+                : await this.musicBrainz.fetchTracks(
+                      musicBrainzAlbum.releases?.[0]?.id || musicBrainzAlbum.id
+                  );
 
-        return { formattedAlbum, genres, tracks };
+        return { formattedAlbum, genres, tracks: normalizedTracks };
     };
 
     private parseCsv = async (csv: string) => {
@@ -547,41 +601,10 @@ export class DailyAlbumService {
                 position: album.position,
                 avg_rating: album.avg_rating,
                 release_date: album.release_date,
+                hasCoverUrl: 'FALSE' as const,
             };
         });
 
         return normalizedAlbums;
-    };
-
-    private getLastfmAxiosInstance = async () => {
-        const axiosInstances = await getApiInstances();
-        return axiosInstances.lastfmAxios;
-    };
-
-    private getLastfmInfo = async (title: string, artist: string) => {
-        const lastfmAxiosInstance = await this.getLastfmAxiosInstance();
-
-        const lastfmInfo = await this.integrationService.fetchInfoWithAlbumData(
-            title,
-            artist,
-            lastfmAxiosInstance
-        );
-        if (!lastfmInfo) {
-            await this.integrationService.saveFailedAlbumSync(
-                {
-                    name: title,
-                    normalizedAlbum: title,
-                    artist: artist,
-                    mbid: null,
-                },
-                '',
-                'SERVER',
-                this.logger,
-                `It was not possible to fetch info from album "${title} - ${artist}" in lastfm`
-            );
-            throw new ValidationError(404, `It was not possible to fetch "${title}" data`);
-        }
-
-        return lastfmInfo;
     };
 }

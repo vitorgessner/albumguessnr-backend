@@ -3,19 +3,15 @@ import { Account } from '../../../generated/prisma/client';
 import IntegrationError from '../errors/IntegrationError';
 import { LastfmWrapper } from '../providers/wrappers/LastfmWrapper';
 import { IProviderConnector } from '../types/IProviderConnector';
-import { MusicBrainzWrapper } from './MusicBrainzWrapper';
 import IntegrationService from '../IntegrationService';
 import ValidationError from '../../../shared/errors/ValidationError';
 
 export class WrapperFactory {
-    private musicBrainz: MusicBrainzWrapper;
     private wrapperCache: Map<string, IProviderConnector> = new Map();
     constructor(
         private logger: winston.Logger,
         private integrationService: IntegrationService
-    ) {
-        this.musicBrainz = new MusicBrainzWrapper();
-    }
+    ) {}
     createWrapper = (userId: string, provider: Account): IProviderConnector => {
         const cacheKey = provider.providerAccountId;
 
@@ -28,13 +24,7 @@ export class WrapperFactory {
         }
 
         if (provider.provider === 'lastfm') {
-            const wrapper = new LastfmWrapper(
-                provider,
-                this.musicBrainz,
-                userId,
-                this.integrationService,
-                this.logger
-            );
+            const wrapper = new LastfmWrapper(provider, userId, this.integrationService);
             this.wrapperCache.set(cacheKey, wrapper);
             return wrapper;
         }

@@ -3,6 +3,7 @@ import { prisma } from '../../config/prisma.js';
 import { FailedAlbumsSyncCreateInput } from '../../generated/prisma/models.js';
 import { IUpdateSync } from './types/IUpdateSync.js';
 import { IUserAlbumFamiliarity } from './types/IUserAlbumFamiliarity.js';
+import { Prisma } from '../../generated/prisma/client.js';
 
 class IntegrationRepository {
     findLastSyncedAt = async (userId: string) => {
@@ -60,13 +61,13 @@ class IntegrationRepository {
 
     findScores = (userId: string) =>
         prisma.userAlbumFamiliarity.findMany({
-            where: { userId },
+            where: { userId, album: { hasCoverUrl: { not: 'FALSE' } } },
             select: { albumId: true, familiarityScore: true },
         });
 
     findAlbumsByIds = (userId: string, albumIds: string[]) =>
         prisma.userAlbumFamiliarity.findMany({
-            where: { userId, albumId: { in: albumIds } },
+            where: { userId, albumId: { in: albumIds }, album: { hasCoverUrl: { not: 'FALSE' } } },
             include: {
                 album: {
                     include: {
@@ -144,16 +145,11 @@ class IntegrationRepository {
                 },
             },
             create: {
-                timesListened: album.playcount,
-                lastTimeListened: album.lastTimeListened ?? new Date(),
-                tracksListened: album.tracksListened ?? 0,
                 familiarityScore: album.familiarityScore,
                 albumId: album.id,
                 userId,
             },
             update: {
-                timesListened: album.playcount,
-                tracksListened: album.tracksListened ?? 0,
                 familiarityScore: album.familiarityScore,
             },
         });
@@ -162,10 +158,10 @@ class IntegrationRepository {
     saveFailedSync = async (albumData: FailedAlbumsSyncCreateInput) => {
         return await prisma.failedAlbumsSync.upsert({
             where: {
-                albumName_artist_apiError: {
+                albumName_artist_cause: {
                     albumName: albumData.albumName,
                     artist: albumData.artist,
-                    apiError: albumData.apiError,
+                    cause: albumData.cause as Prisma.InputJsonValue,
                 },
             },
             create: {

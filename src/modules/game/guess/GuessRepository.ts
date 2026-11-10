@@ -15,15 +15,6 @@ class GuessRepository {
             select: {
                 timesGuessed: true,
                 lastTimeGuessed: true,
-                album: {
-                    select: {
-                        userAlbumFamiliarities: {
-                            select: {
-                                timesListened: true,
-                            },
-                        },
-                    },
-                },
             },
         });
     };

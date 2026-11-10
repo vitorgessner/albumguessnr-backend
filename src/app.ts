@@ -106,20 +106,10 @@ export const getApp = (): { app: Application; startConsumers: () => Promise<void
     const profileRepo = new ProfileRepository();
 
     const integrationRepo = new IntegrationRepository();
-    const integrationService = new IntegrationService(
-        integrationRepo,
-        albumRepo,
-        profileRepo,
-        logger
-    );
+    const integrationService = new IntegrationService(integrationRepo, albumRepo, profileRepo);
 
     const dailyAlbumRepo = new DailyAlbumRepository();
-    const dailyAlbumService = new DailyAlbumService(
-        dailyAlbumRepo,
-        albumRepo,
-        integrationService,
-        logger
-    );
+    const dailyAlbumService = new DailyAlbumService(dailyAlbumRepo, albumRepo, integrationService);
 
     const albumService = new AlbumService(albumRepo, dailyAlbumService);
     const albumController = new AlbumController(albumService);
@@ -172,7 +162,11 @@ export const getApp = (): { app: Application; startConsumers: () => Promise<void
     const authService = new AuthService(authRepo, dailyAlbumRepo, logger);
     const authController = new AuthController(authService);
 
-    const dailyAlbumController = new DailyAlbumController(dailyAlbumService, authService, logger);
+    const dailyAlbumController = new DailyAlbumController(
+        dailyAlbumService,
+        authService,
+        albumRepo
+    );
 
     const analyticsRepo = new AnalyticsRepository();
     const analyticsService = new AnalyticsService(analyticsRepo);

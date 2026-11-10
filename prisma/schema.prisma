@@ -184,10 +184,7 @@ model UserAlbumStats {
 }
 
 model UserAlbumFamiliarity {
-  timesListened    Int?
-  tracksListened   Int?
   familiarityScore Float
-  lastTimeListened DateTime
   albumId          String
   album            Album    @relation(fields: [albumId], references: [id], onDelete: Cascade)
   userId           String
@@ -219,12 +216,12 @@ enum FriendsStats {
 
 model Album {
   id                     String                 @id @default(uuid())
-  mbid                   String?
+  mbid                   String?                @unique
   name                   String
   normalizedName         String
   normalizedArtist       String
   year                   String?
-  cover_url              String
+  hasCoverUrl            CoverUrlEnum                @default(FALSE)
   genres                 AlbumsGenre[]
   artists                AlbumsArtist[]
   userAlbumFamiliarities UserAlbumFamiliarity[]
@@ -242,11 +239,15 @@ model Album {
   @@unique([normalizedName, normalizedArtist])
 }
 
+enum CoverUrlEnum {
+  RELEASE_GROUP
+  RELEASE
+  FALSE
+}
+
 model DailyAlbum {
   albumId         String           @id @unique
   album           Album            @relation(fields: [albumId], references: [id], onDelete: Cascade)
-  lastfmListeners String?
-  lastfmPlaycount String?
   date            DateTime         @unique
   userGuesses     UserDailyAlbum[]
 }
@@ -356,7 +357,7 @@ model FailedAlbumsSync {
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
-  @@unique([albumName, artist, apiError])
+  @@unique([albumName, artist, cause])
 }
 
 model UserAlbumDataErrorsLogs {

@@ -2,6 +2,21 @@ export interface IMBAlbumResponse {
     'release-groups': IMBAlbum[];
 }
 
+export interface IMBTrackResponse {
+    media: {
+        tracks: IMBTrack[];
+    }[];
+}
+
+export interface IMBTrack {
+    title: string;
+    position: number;
+    recording: {
+        title: string;
+        'first-release-date': string;
+    };
+}
+
 export interface IMBAlbum {
     id: string;
     'type-id': string;
@@ -10,10 +25,19 @@ export interface IMBAlbum {
     'artist-credit-id': string;
     count: number;
     title: string;
+    date: string;
     'first-release-date': string;
     'primary-type': string;
     'secondary-types': Array<string>;
     'secondary-types-ids': Array<string>;
+    'release-group'?: {
+        id: string;
+        title: string;
+        'primary-type': string;
+    };
+    media: {
+        tracks: IMBTrack[];
+    }[];
     'artist-credit': [
         {
             name: string;
@@ -22,7 +46,7 @@ export interface IMBAlbum {
                 name: string;
                 'sort-name': string;
                 disambiguation: string;
-                alisases: [
+                aliases: [
                     {
                         'sort-name': string;
                         'type-id': string;
@@ -37,14 +61,7 @@ export interface IMBAlbum {
             };
         },
     ];
-    releases: [
-        {
-            id: string;
-            'status-id': string;
-            title: string;
-            status: string;
-        },
-    ];
+    releases: IMBAlbum[];
     tags: [
         {
             count: number;

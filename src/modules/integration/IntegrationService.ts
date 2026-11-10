@@ -8,30 +8,44 @@ import { INormalizedAlbum, ISavedAlbum } from '../album/types/album.js';
 import { IProviderConnector } from './types/IProviderConnector.js';
 import { PossibleApis } from '../../generated/prisma/enums.js';
 import AuthError from '../auth/errors/AuthError.js';
-import type { IAlbumInfo } from './providers/interfaces/lastfmInterfaces.js';
-import type { AxiosInstance } from 'axios';
-import { ITopAlbumResponse } from './providers/interfaces/lastfmInterfaces.js';
 import { pickAlbumIds } from './utils/pickAlbums.js';
-import { lfRequest } from './providers/config/axiosInstances.js';
 import { IUpdateSync } from './types/IUpdateSync.js';
+import axiosInstance from '../../config/axios.js';
+import { logger } from '../../config/logger/logger.js';
+import { normalizeAlbumName, normalizeArtistName } from './utils/normalize.js';
+import { AxiosError } from 'axios';
+import { coverArtRequest } from './providers/config/axiosInstances.js';
 
 const apiMap: Record<string, PossibleApis> = {
     spotify: 'SPOTIFY',
     lastfm: 'LASTFM',
+    musicbrainz: 'MUSICBRAINZ',
 };
 
 class IntegrationService {
     constructor(
         private integrationRepo: IntegrationRepository,
         private albumRepo: AlbumRepository,
-        private profileRepo: ProfileRepository,
-        private logger: winston.Logger
+        private profileRepo: ProfileRepository
     ) {}
 
-    findAlbumByTitleAndArtist = async (title: string, artist: string) => {
-        const album = await this.albumRepo.getByTitleAndArtist(title, artist);
+    findAlbumOnDatabase = async (
+        mbid: string,
+        title: string,
+        artist: string
+    ): Promise<ISavedAlbum | null> => {
+        const databaseAlbum = await this.albumRepo.getByMbid(mbid);
 
-        return album;
+        if (!databaseAlbum) {
+            const databaseAlbum = await this.albumRepo.getByTitleAndArtist(
+                normalizeAlbumName(title),
+                normalizeArtistName(artist)
+            );
+
+            return databaseAlbum;
+        }
+
+        return databaseAlbum;
     };
 
     findLastSyncedAt = async (userId: string) => {
@@ -73,15 +87,13 @@ class IntegrationService {
             (!syncStats?.syncingId || syncStats.syncingId !== syncingId) &&
             !isStale
         ) {
-            console.log(syncingId, syncStats.syncingId);
-            this.logger.warn('Already syncing');
+            logger.warn('Already syncing');
             return false;
         }
 
         const updated = await this.integrationRepo.updateSyncingId(syncStats?.syncingId);
         if (updated.count !== 1) {
-            console.log(updated.count, syncingId, syncStats?.syncingId);
-            this.logger.warn('Killing syncing concurrency');
+            logger.warn('Killing syncing concurrency');
             return false;
         }
 
@@ -111,14 +123,18 @@ class IntegrationService {
                     album.rawAlbum,
                     userId,
                     providerName,
-                    this.logger,
+                    logger,
                     album.error
                 );
             })
         );
 
+        const uniqueFulfilled = [
+            ...new Map(fulfilled.map((a) => [a.mbid || a.normalizedName, a])).values(),
+        ];
+
         await Promise.all(
-            fulfilled.map(async (album) => {
+            uniqueFulfilled.map(async (album) => {
                 const childLogger = this.instantiateChildLogger(userId, album);
 
                 const failedAlbumData = {
@@ -148,13 +164,12 @@ class IntegrationService {
                     );
                 }
 
-                console.log('syncing: ' + album.normalizedName + ' - ' + album.normalizedArtist);
                 await this.createAndSyncNewAlbum(album, childLogger, userId, providerName);
             })
         );
 
         if (!hasNextPage || currentCursor === 450 || currentCursor === 10) {
-            this.logger.info({
+            logger.info({
                 message: 'Finished syncing albums',
                 userId,
                 fetched: currentCursor,
@@ -194,8 +209,19 @@ class IntegrationService {
 
         const ids = pickAlbumIds(candidates, total);
         const albums = await this.integrationRepo.findAlbumsByIds(user.userId, ids);
+        const albumsWithCovers = await Promise.all(
+            albums.map(async (a) => {
+                return {
+                    ...a,
+                    album: {
+                        ...a.album,
+                        cover_url: await this.getCoverUrl(a.album.mbid ?? ''),
+                    },
+                };
+            })
+        );
 
-        const byId = new Map(albums.map((a) => [a.albumId, a]));
+        const byId = new Map(albumsWithCovers.map((a) => [a.albumId, a]));
         return ids.map((i) => byId.get(i)!).filter(Boolean);
     };
 
@@ -218,16 +244,13 @@ class IntegrationService {
 
     syncAlbum = async (
         userId: string,
-        album: { details: ISavedAlbum; playcount: number | null; familiarityScore: number },
+        album: { details: ISavedAlbum; familiarityScore: number },
         logger: winston.Logger,
         provider: string
     ) => {
         try {
             return await this.integrationRepo.syncAlbum(userId, {
                 id: album.details.id,
-                playcount: album.playcount ? Number(album.playcount) : null,
-                lastTimeListened: null,
-                tracksListened: null,
                 familiarityScore: album.familiarityScore,
             });
         } catch (err) {
@@ -251,53 +274,6 @@ class IntegrationService {
             );
             return undefined;
         }
-    };
-
-    fetchInfoWithAlbumData = async (
-        name: string,
-        artist: string,
-        lastfmAxios: AxiosInstance,
-        logger?: winston.Logger
-    ): Promise<IAlbumInfo | undefined> => {
-        try {
-            const trimmedAlbum = name.trim();
-            const trimmedArtist = artist.trim();
-
-            const response = await lfRequest(() =>
-                lastfmAxios.get('', {
-                    params: {
-                        method: 'album.getinfo',
-                        album: trimmedAlbum,
-                        artist: trimmedArtist,
-                    },
-                })
-            );
-
-            const info: IAlbumInfo = response.data.album;
-
-            if (!info) {
-                logger?.warn(new IntegrationError(404, 'No info found on lastfm'));
-            }
-
-            return info;
-        } catch (err) {
-            logger?.error(
-                new IntegrationError(500, 'Failed to fetch albums tracks', {
-                    cause: sanitizeError(err),
-                })
-            );
-            return undefined;
-        }
-    };
-
-    getCoverUrl = (album: ITopAlbumResponse | IAlbumInfo, logger?: winston.Logger): string => {
-        const cover_url = album.image[album.image.length - 1]?.['#text'];
-        if (!cover_url) {
-            logger?.error(new IntegrationError(404, 'Cover_url not found'));
-            throw new IntegrationError(404, 'Cover_url not found');
-        }
-
-        return cover_url;
     };
 
     saveFailedAlbumSync = async (
@@ -347,8 +323,37 @@ class IntegrationService {
         });
     };
 
+    hasCoverUrl = async (mbid?: string): Promise<'release-group' | 'release' | null> => {
+        for (const type of ['release-group', 'release'] as const) {
+            try {
+                await coverArtRequest(() =>
+                    axiosInstance.head(`https://coverartarchive.org/${type}/${mbid}/front-500`)
+                );
+                return type;
+            } catch (err) {
+                if (err instanceof AxiosError && err.response?.status === 404) continue;
+                throw err;
+            }
+        }
+        return null;
+    };
+
+    getCoverUrl = async (mbid: string) => {
+        const album = await this.albumRepo.getByMbid(mbid);
+        if (!album || album.hasCoverUrl === 'FALSE') {
+            throw new IntegrationError(404, 'Album or cover_url not found');
+        }
+
+        const type = {
+            RELEASE_GROUP: 'release-group',
+            RELEASE: 'release',
+        };
+
+        return `https://coverartarchive.org/${type[album.hasCoverUrl]}/${mbid}/front-500`;
+    };
+
     private instantiateChildLogger = (userId: string, album: INormalizedAlbum) => {
-        const childLogger = this.logger.child({
+        const childLogger = logger.child({
             requestId: userId,
             album: album.name,
             mbid: album.mbid,
@@ -370,9 +375,6 @@ class IntegrationService {
 
             await this.integrationRepo.syncAlbum(userId, {
                 id: newAlbum.id,
-                playcount: album.playcount ? Number(album.playcount) : null,
-                lastTimeListened: null,
-                tracksListened: null,
                 familiarityScore: album.familiarityScore,
             });
         } catch (err) {
@@ -401,6 +403,10 @@ class IntegrationService {
         const formattedTags = album.genres ?? [];
         const formattedArtists = album.artists ?? [];
         const formattedTracks = album.tracks ?? [];
+        const hasCoverUrlType = {
+            'release-group': 'RELEASE_GROUP',
+            release: 'RELEASE',
+        } as const;
         const newAlbum = await this.albumRepo.create(
             {
                 mbid: album.mbid === '' ? null : album.mbid,
@@ -408,7 +414,7 @@ class IntegrationService {
                 normalizedName: album.normalizedName,
                 normalizedArtist: album.normalizedArtist,
                 year: album.year ?? null,
-                cover_url: album.cover_url,
+                hasCoverUrl: hasCoverUrlType[album.hasCoverUrl],
             },
             [...formattedTags],
             [...formattedArtists],

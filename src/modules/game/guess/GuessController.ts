@@ -29,7 +29,6 @@ class GuessController {
         res.status(200).json({
             timesGuessed: response?.timesGuessed,
             lastTimeGuessed: response?.lastTimeGuessed,
-            timesListened: response?.album.userAlbumFamiliarities[0]?.timesListened,
         });
     };
 

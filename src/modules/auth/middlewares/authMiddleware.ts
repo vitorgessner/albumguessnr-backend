@@ -14,7 +14,11 @@ declare global {
 
 const authMiddleware = (req: Request, res: Response, next: NextFunction) => {
     const token = req.cookies.token;
-    if (!token) throw new AuthError(401, 'Invalid token format');
+    if (!token) {
+        res.clearCookie('refresh');
+        res.clearCookie('token');
+        throw new AuthError(401, 'Invalid token format');
+    }
 
     const secret = env.SECRET_JWT;
     if (!secret) throw new AuthError(500, 'JWT secret key is not defined');

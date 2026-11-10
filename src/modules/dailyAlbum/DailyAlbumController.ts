@@ -1,5 +1,4 @@
 /* eslint-disable max-len */
-import winston from 'winston';
 import ValidationError from '../../shared/errors/ValidationError';
 import { sendMail } from '../../shared/utils/sendMail';
 import AuthService from '../auth/AuthService';
@@ -8,12 +7,16 @@ import COOKIE_OPTIONS from '../auth/utils/COOKIE_OPTIONS';
 import { DailyAlbumService } from './DailyAlbumService';
 import type { NextFunction, Request, Response } from 'express';
 import setLimiter from '../auth/middlewares/limiter';
+import { logger } from '../../config/logger/logger';
+import AlbumRepository from '../album/AlbumRepository';
+import { isNotUndefined } from './utils/isNotUndefined';
+import type { PossibleAlbums } from './types/possibleAlbums';
 
 export class DailyAlbumController {
     constructor(
         private dailyAlbumService: DailyAlbumService,
         private authService: AuthService,
-        private logger: winston.Logger
+        private albumRepo: AlbumRepository
     ) {}
 
     getDailyStats = async (req: Request, res: Response, next: NextFunction) => {
@@ -64,7 +67,7 @@ export class DailyAlbumController {
         if (!(await this.dailyAlbumService.checkIfUserGuessedYesterdaysAlbum(userId))) {
             if (!userDailyAlbumStatistics) {
                 await this.dailyAlbumService.resetUserStreak(userId);
-                this.logger.info({
+                logger.info({
                     event: 'Reset daily album streak',
                     user: userId,
                 });
@@ -102,12 +105,24 @@ export class DailyAlbumController {
         }
 
         const possibleAlbums = await this.dailyAlbumService.findPossibleAlbums(attempt);
+        const possibleAlbumsWithCover = await Promise.all(
+            possibleAlbums
+                .filter((album): album is PossibleAlbums & { mbid: string } =>
+                    isNotUndefined(album.mbid)
+                )
+                .map(async (album) => {
+                    return {
+                        ...album,
+                        cover_url: await this.dailyAlbumService.getCoverUrl(album.mbid),
+                    };
+                })
+        );
 
         return res.status(200).json({
             status: 'success',
             message: 'Returned possible albums',
             count: possibleAlbums.length,
-            possibleAlbums,
+            possibleAlbums: possibleAlbumsWithCover,
         });
     };
 
@@ -183,7 +198,7 @@ export class DailyAlbumController {
         });
     };
 
-    defineDailyAlbumForDayAfterTomorrow = async (req: Request, res: Response) => {
+    defineNextDailyAlbum = async (req: Request, res: Response) => {
         const electableAlbum = await this.dailyAlbumService.getRandomElectableAlbum();
 
         const { album, dailyAlbum, tomorrow } = await this.dailyAlbumService.setDailyAlbum(
@@ -212,8 +227,6 @@ export class DailyAlbumController {
             <p>Rym ranking: ${album.rymRanking?.toFixed(0)}</p>
             <p>Rym rating: ${album.rymRating?.toFixed(2)}</p>
             <p>Year: ${album.year}</p>
-            <p>Listeners: ${dailyAlbum.lastfmListeners}</p>
-            <p>Playcount: ${dailyAlbum.lastfmPlaycount}</p>
             `
         );
 
@@ -221,6 +234,7 @@ export class DailyAlbumController {
             status: 'success',
             message: `Set ${dateObj.toUTCString()} daily album`,
             dailyAlbum,
+            cover_url: album.cover_url,
         });
     };
 

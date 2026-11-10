@@ -15,7 +15,7 @@ export const dailyAlbumRoutes = (controller: DailyAlbumController) => {
     router.get('/row/:albumId', (req, res) => controller.buildGuessRow(req, res));
 
     router.post('/album', setLimiter(15, 5), adminAuthMiddleware, (req, res) =>
-        controller.defineDailyAlbumForDayAfterTomorrow(req, res)
+        controller.defineNextDailyAlbum(req, res)
     );
 
     router.post('/find', (req, res) => controller.findPossibleAlbums(req, res));

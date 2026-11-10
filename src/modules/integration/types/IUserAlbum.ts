@@ -23,5 +23,4 @@ export interface IUserAlbum {
 
 export interface IUserAlbumWithInfo extends IUserAlbum {
     normalizedArtist: string;
-    cover_url: string;
 }

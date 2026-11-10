@@ -27,7 +27,6 @@ export async function runDailyAlbumCron() {
                 if (error instanceof Error) {
                     logger.error('⚠️ Cron failed after all retries:', error.message);
                 }
-                process.exit(1);
             }
 
             const backoffLimit = BASE_BACKOFF_MS * Math.pow(2, attempt - 1);
