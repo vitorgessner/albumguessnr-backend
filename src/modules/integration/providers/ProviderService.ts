@@ -39,6 +39,14 @@ export class ProviderService {
         await this.providerRepo.deleteAccount(provider, providerAccountId);
     };
 
+    deleteUserAlbumFamiliarities = async (userId: string) => {
+        if (!userId) {
+            throw new AuthError(404, 'User not authenticated');
+        }
+
+        await this.providerRepo.deleteUserAlbumFamiliarities(userId);
+    };
+
     setSyncingId = async (provider: string, providerAccountId: string) => {
         return await this.providerRepo.setSyncingId(provider, providerAccountId);
     };

@@ -35,6 +35,14 @@ export class ProviderRepository {
         });
     };
 
+    deleteUserAlbumFamiliarities = async (userId: string) => {
+        return await prisma.userAlbumFamiliarity.deleteMany({
+            where: {
+                userId,
+            },
+        });
+    };
+
     setMainProvider = async (userId: string, mainAccountId: string) => {
         return await prisma.user.update({
             where: {
